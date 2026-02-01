@@ -38,7 +38,7 @@ export default function Settings() {
   const [editDadFears, setEditDadFears] = useState('');
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [loadingReminders, setLoadingReminders] = useState(false);
+  // loadingReminders removed - re-extraction handled from dashboard
 
   useEffect(() => {
     setMounted(true);
@@ -124,41 +124,6 @@ export default function Settings() {
   const saveWhy = () => {
     saveSettings({ dadMeaning: editDadMeaning, dadFears: editDadFears });
     setEditingWhy(false);
-  };
-
-  // Re-extract wins
-  const reExtractReminders = async () => {
-    if (!settings?.docUrls?.length) return;
-    setLoadingReminders(true);
-    const allWins = [];
-    for (const url of settings.docUrls) {
-      if (!url.trim()) continue;
-      try {
-        const docRes = await fetch('/api/fetch-doc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ docUrl: url })
-        });
-        if (!docRes.ok) continue;
-        const docData = await docRes.json();
-        const winsRes = await fetch('/api/extract-wins', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: docData.content, title: docData.title })
-        });
-        if (winsRes.ok) {
-          const winsData = await winsRes.json();
-          allWins.push(...winsData.wins);
-        }
-      } catch (e) {
-        console.error('Error extracting wins:', e);
-      }
-    }
-    if (allWins.length > 0) {
-      localStorage.setItem('dadReadyReminders', JSON.stringify(allWins));
-      setRemindersCount(allWins.length);
-    }
-    setLoadingReminders(false);
   };
 
   const clearReminders = () => {
@@ -487,38 +452,11 @@ export default function Settings() {
             </div>
             <div className="wins-display">
               <p className="wins-count">{remindersCount} reminders loaded</p>
-              <div className="wins-actions">
-                <button
-                  onClick={reExtractReminders}
-                  className="action-btn"
-                  disabled={loadingReminders || !settings.docUrls?.length}
-                >
-                  {loadingReminders ? 'Extracting...' : 'Re-extract Reminders'}
-                </button>
-                {remindersCount > 0 && (
+              {remindersCount > 0 && (
+                <div className="wins-actions">
                   <button onClick={clearReminders} className="action-btn secondary">Clear Reminders</button>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* Voice & AI */}
-          <section className="card">
-            <div className="card-header">
-              <h2 className="card-title">Voice & AI</h2>
-            </div>
-            <div className="api-key-section">
-              <label className="field-label">OpenAI API Key (for voice transcription)</label>
-              <div className="api-key-row">
-                <input
-                  type="password"
-                  placeholder="sk-..."
-                  value={settings.openaiApiKey || ''}
-                  onChange={(e) => saveSettings({ openaiApiKey: e.target.value })}
-                  className="settings-input"
-                />
-              </div>
-              <p className="field-note">Your key stays on your device and is only used for voice note transcription via OpenAI Whisper.</p>
+                </div>
+              )}
             </div>
           </section>
 

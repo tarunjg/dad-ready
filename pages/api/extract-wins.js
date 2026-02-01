@@ -22,16 +22,19 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "user",
-          content: `You are helping someone remember the gold in their story. Read through their journal content and extract 5-10 meaningful moments where their character, strength, or heart shone through.
+          content: `You are helping someone remember specific, real moments from their story. Read through their journal content and extract 5-10 concrete reminders grounded in actual events they described.
 
 For each moment:
-- Abstract any specific names (use "a friend", "a colleague", "someone close to you" instead)
-- Frame it as a reminder of a core strength — resilience, empathy, courage, patience, discipline, love
-- Connect it to why they are ready to be a great father
+- Reference the SPECIFIC situation, event, or circumstance they wrote about — the time of day, the place, the action, the choice they made
+- Abstract any specific names (use "a friend", "a colleague", "someone close to you" instead) but keep ALL other concrete details
+- Connect it to a core strength — resilience, empathy, courage, patience, discipline, love
+- Briefly tie it to why they are ready to be a great father
 - Write in second person, present tense ("You...")
-- Keep each reminder 2-3 sentences
+- Keep each reminder 2-4 sentences
 
-The tone should be warm, grounding, and meaningful — not congratulatory or hype. Think of a wise mentor quietly reminding someone of who they really are. These are "just a reminder" moments — proof that this person has always had what it takes.
+IMPORTANT: Be SPECIFIC. Do NOT write generic affirmations. Every reminder MUST reference a concrete event, detail, or moment from their writing. If you can't point to a specific thing they wrote about, don't include it. The person should read this and immediately know exactly which moment you're talking about.
+
+The tone should be warm, grounding, and real — like a close friend who was there reminding you of something you lived. Not a motivational poster. Not a therapist. A friend who saw it happen.
 
 Document title: ${title || 'Journal Entry'}
 
@@ -41,7 +44,7 @@ ${content.substring(0, 8000)}
 Return the reminders as a JSON array of strings. Only return the JSON array, nothing else.
 
 Example format:
-["Remember when you stayed up all night helping a friend through a crisis? That wasn't obligation — that was who you are. That same heart is what your child will know as safety.", "You chose the harder path when no one was watching. That quiet discipline — the kind that doesn't need an audience — is exactly what fatherhood asks for."]`
+["You wrote about that night you sat in the parking lot for an hour after work, just to make sure a friend got home safe after a rough call. Nobody asked you to do that. That instinct — to protect without being asked — is what your child will feel every single day.", "Remember the week you worked doubles and still found time to cook dinner because someone you loved needed a home-cooked meal after their surgery? That wasn't small. That was a man who puts love into action even when he's running on empty. Your kid is going to know that kind of love."]`
         }
       ]
     });

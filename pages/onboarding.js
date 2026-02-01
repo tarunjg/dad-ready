@@ -167,46 +167,40 @@ export default function Onboarding() {
               <div className="welcome-header">
                 <h1>Welcome, {firstName}</h1>
                 <p className="subtitle">
-                  You're about to begin a 28-day journey to build the habits, strength, and mindset
-                  you need for the most important role of your life.
+                  Getting ready for fatherhood means building yourself up — mind, body, and soul.
+                  This is your 28-day challenge to become the dad you want to be.
                 </p>
               </div>
 
               <div className="welcome-card">
                 <h2>What is Dad Ready?</h2>
                 <p>
-                  Dad Ready is a personal challenge for February 2026. It's built on a simple idea:
-                  the habits you practice daily compound into the person you become. When you align
-                  your daily routine with your biology, you don't just survive — you <em>flourish</em>.
+                  Dad Ready is a personal challenge for February 2026. It's built around three pillars —
+                  Body, Mind, and Soul — because the best dads take care of all of themselves.
+                  The physical habits, the mental preparation, the inner reflection — they all compound
+                  into the father you're becoming.
                 </p>
 
                 <div className="benefits-grid">
                   <div className="benefit">
-                    <span>🧠</span>
-                    <div>
-                      <strong>Mental Clarity</strong>
-                      <p>Stable energy, focused thinking, emotional resilience</p>
-                    </div>
-                  </div>
-                  <div className="benefit">
-                    <span>⚡</span>
-                    <div>
-                      <strong>Sustained Energy</strong>
-                      <p>No crashes, consistent output, ready for anything</p>
-                    </div>
-                  </div>
-                  <div className="benefit">
                     <span>💪</span>
                     <div>
-                      <strong>Physical Strength</strong>
-                      <p>Functional fitness, injury prevention, longevity</p>
+                      <strong>Body</strong>
+                      <p>Build physical strength, endurance, and energy through daily habits</p>
                     </div>
                   </div>
                   <div className="benefit">
-                    <span>❤️</span>
+                    <span>🧠</span>
                     <div>
-                      <strong>Heart Health</strong>
-                      <p>Cardiovascular fitness, lower inflammation, better sleep</p>
+                      <strong>Mind</strong>
+                      <p>Stay informed on your partner's pregnancy and prepare mentally for fatherhood</p>
+                    </div>
+                  </div>
+                  <div className="benefit">
+                    <span>🧘</span>
+                    <div>
+                      <strong>Soul</strong>
+                      <p>Cultivate gratitude, reflection, and the emotional resilience your family needs</p>
                     </div>
                   </div>
                 </div>
@@ -216,19 +210,19 @@ export default function Onboarding() {
                   <div className="how-steps">
                     <div className="how-step">
                       <span className="how-num">1</span>
-                      <p>Choose the habits that matter to you</p>
+                      <p>Choose the Body and Soul habits you want to build</p>
                     </div>
                     <div className="how-step">
                       <span className="how-num">2</span>
-                      <p>Set up partner support if you're expecting</p>
+                      <p>Set up pregnancy tracking to support your partner's journey</p>
                     </div>
                     <div className="how-step">
                       <span className="how-num">3</span>
-                      <p>Connect your journals to surface your wins</p>
+                      <p>Connect your journals to surface reminders of your gold</p>
                     </div>
                     <div className="how-step">
                       <span className="how-num">4</span>
-                      <p>Tell us your why — so we can keep you going</p>
+                      <p>Reflect on your why — the soul behind the mission</p>
                     </div>
                   </div>
                 </div>

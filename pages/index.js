@@ -3,7 +3,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import Head from 'next/head';
 import { getQuoteByDay } from '../lib/quotes';
-import { getDailyTip, getPregnancyPercentage } from '../lib/pregnancy';
+import { getDailyTip, getPregnancyPercentage, getEstimatedDueDate, getPregnancyInfoAtDate, pregnancyMilestones } from '../lib/pregnancy';
 import { PILLARS, getAllHabits, getTotalCompletion, getPillarCompletion, migrateSettings } from '../lib/pillars';
 
 export default function Home() {
@@ -136,8 +136,8 @@ export default function Home() {
 
     window.onYouTubeIframeAPIReady = () => {
       ytPlayerRef.current = new window.YT.Player('yt-player-container', {
-        videoId: 'bNgxmYMCjtQ',
-        playerVars: { autoplay: 0, loop: 1, playlist: 'bNgxmYMCjtQ' },
+        videoId: 'A4ZK0vt8GQU',
+        playerVars: { autoplay: 0, loop: 1, playlist: 'A4ZK0vt8GQU' },
         events: {
           onReady: () => {},
         }
@@ -239,17 +239,10 @@ export default function Home() {
         // Transcribe
         setTranscribing(true);
         try {
-          const apiKey = settings?.openaiApiKey;
-          if (!apiKey) {
-            alert('Please add your OpenAI API key in Settings to transcribe voice notes.');
-            setTranscribing(false);
-            return;
-          }
-
           const res = await fetch('/api/transcribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audio: base64.split(',')[1], apiKey })
+            body: JSON.stringify({ audio: base64.split(',')[1] })
           });
 
           if (res.ok) {
@@ -271,7 +264,7 @@ export default function Home() {
           }
         } catch (err) {
           console.error('Transcription error:', err);
-          alert('Failed to transcribe. Check your API key in settings.');
+          alert('Failed to transcribe. Please try again.');
         }
         setTranscribing(false);
       };
@@ -469,6 +462,23 @@ export default function Home() {
     return intent && (intent.goals?.length > 0 || intent.notes?.trim());
   }
 
+  // Pillar streak (consecutive days from today backwards)
+  function getPillarStreak(pillarKey) {
+    const pillar = PILLARS[pillarKey];
+    const pillarHabitIds = pillar.habits.filter(h => activeHabitIds.includes(h.id)).map(h => h.id);
+    if (pillarHabitIds.length === 0) return 0;
+    let streak = 0;
+    const endIdx = february2026.indexOf(today) >= 0 ? february2026.indexOf(today) : -1;
+    if (endIdx < 0) return 0;
+    for (let i = endIdx; i >= 0; i--) {
+      const d = february2026[i];
+      const dh = data?.habits?.[d] || {};
+      if (pillarHabitIds.every(id => dh[id])) streak++;
+      else break;
+    }
+    return streak;
+  }
+
   // Pillar stats for stats view
   function getPillarStats(pillarKey) {
     const pillar = PILLARS[pillarKey];
@@ -484,13 +494,6 @@ export default function Home() {
     return { total, done, rate: total > 0 ? Math.round((done / total) * 100) : 0 };
   }
 
-  // Streak projection for future dates
-  function getStreakProjection(futureDate) {
-    const currentStreak = getStreak();
-    const daysAhead = Math.ceil((new Date(futureDate) - new Date(today)) / (1000 * 60 * 60 * 24));
-    return currentStreak + daysAhead;
-  }
-
   // Miles projection
   function getMilesProjection(futureDate) {
     const totalSoFar = getTotalMiles();
@@ -498,22 +501,6 @@ export default function Home() {
     const avgPerDay = totalSoFar / daysSoFar;
     const targetDayIdx = february2026.indexOf(futureDate);
     return totalSoFar + avgPerDay * (targetDayIdx + 1 - daysSoFar);
-  }
-
-  // Pregnancy at future date
-  function getPregnancyAtDate(dateStr) {
-    if (!settings?.trackPregnancy || !settings?.lmpDate) return null;
-    const lmp = new Date(settings.lmpDate);
-    const target = new Date(dateStr);
-    const cycleLength = settings.cycleLength || 28;
-    const ovulationDay = cycleLength - 14;
-    const adjustment = ovulationDay - 14;
-    const daysSinceLMP = Math.floor((target - lmp) / (1000 * 60 * 60 * 24));
-    const adjustedDays = daysSinceLMP - adjustment;
-    const weeks = Math.floor(adjustedDays / 7);
-    const days = adjustedDays % 7;
-    const percent = Math.min(Math.round((adjustedDays / 280) * 100), 100);
-    return { weeks, days, percent };
   }
 
   // Reflections count for stats
@@ -603,7 +590,17 @@ export default function Home() {
         <div className="background" />
 
         <header className="header">
-          <h1 className="logo">Dad Ready</h1>
+          <div className="header-left">
+            {session?.user?.image && (
+              <img src={session.user.image} alt="" className="header-avatar" referrerPolicy="no-referrer" />
+            )}
+            <div className="header-info">
+              <span className="header-welcome">Welcome, {session?.user?.name?.split(' ')[0] || 'there'}</span>
+              {pregnancyInfo && pregnancyPercent && (
+                <span className="header-pregnancy">{pregnancyInfo.weeks}w {pregnancyInfo.days}d &bull; {pregnancyPercent.percent}%</span>
+              )}
+            </div>
+          </div>
           <button onClick={() => router.push('/settings')} className="settings-btn">⚙️</button>
         </header>
 
@@ -673,6 +670,12 @@ export default function Home() {
                 {/* Pregnancy */}
                 {pregnancyInfo && pregnancyPercent && (
                   <div className="pregnancy-section">
+                    {settings?.lmpDate && (
+                      <div className="pregnancy-due-date">
+                        Est. due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28)
+                          .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    )}
                     <div className="pregnancy-top-row">
                       <span className="pregnancy-week-badge">{pregnancyInfo.weeks}w {pregnancyInfo.days}d</span>
                       <div className="pregnancy-progress-wrap">
@@ -781,6 +784,12 @@ export default function Home() {
                   <div className="reminder-label">Just A Reminder</div>
                   <p className="reminder-text">{currentReminder}</p>
                   <button onClick={showNextReminder} className="reminder-btn">Show me another →</button>
+                  {pregnancyInfo && (
+                    <div className="reminder-support-tip">
+                      <span className="support-tip-icon">💡</span>
+                      <p className="support-tip-text">{pregnancyInfo.todaysTip}</p>
+                    </div>
+                  )}
                 </div>
               ) : settings?.docUrls?.some(url => url.trim()) ? (
                 <div className="reminder-card">
@@ -811,6 +820,11 @@ export default function Home() {
                     const hasJournal = hasJournalEntry(date);
                     const hasIntent = hasIntentions(date);
                     const isFuture = date > today;
+                    const isMilestoneDate = (() => {
+                      if (!settings?.trackPregnancy || !settings?.lmpDate) return false;
+                      const pi = getPregnancyInfoAtDate(settings.lmpDate, date, settings.cycleLength || 28);
+                      return pi && pi.days === 0 && pregnancyMilestones.some(m => m.week === pi.weeks);
+                    })();
                     return (
                       <button key={date}
                         onClick={() => setSelectedDate(date)}
@@ -818,7 +832,8 @@ export default function Home() {
                       >
                         {dayNum}
                         {hasJournal && <span className="journal-dot" />}
-                        {hasIntent && isFuture && <span className="intent-dot" />}
+                        {isMilestoneDate && <span className="milestone-dot" />}
+                        {hasIntent && isFuture && !isMilestoneDate && <span className="intent-dot" />}
                       </button>
                     );
                   })}
@@ -827,7 +842,7 @@ export default function Home() {
                   <div className="legend-item"><span className="legend-dot complete" /> All done</div>
                   <div className="legend-item"><span className="legend-dot partial" /> Partial</div>
                   <div className="legend-item"><span className="legend-dot journal" /> Notes</div>
-                  <div className="legend-item"><span className="legend-dot intent" /> Plan</div>
+                  <div className="legend-item"><span className="legend-dot milestone" /> Milestone</div>
                 </div>
               </div>
 
@@ -859,54 +874,57 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Future date: Planning + Projection */}
+              {/* Future date: Pregnancy focus */}
               {selectedDate && isFutureDate && (
                 <div className="calendar-detail card">
                   <h3 className="detail-date">{formatDate(selectedDate)}</h3>
-                  <div className="detail-section-label">Set Intentions</div>
-                  <div className="intention-goals">
-                    {intentionGoals.map((goal, i) => (
-                      <div key={i} className="intention-goal-item">
-                        <span>• {goal}</span>
-                        <button onClick={() => removeIntentionGoal(i)} className="intention-remove">×</button>
-                      </div>
-                    ))}
-                    <div className="intention-add-row">
-                      <input type="text" placeholder="Add an intention..." value={newGoalInput}
-                        onChange={(e) => setNewGoalInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && addIntentionGoal()}
-                        className="input-field" />
-                      <button onClick={addIntentionGoal} className="save-btn small">+</button>
-                    </div>
-                  </div>
-                  <textarea placeholder="Notes for this day..." value={intentionInput}
-                    onChange={(e) => setIntentionInput(e.target.value)}
-                    onBlur={saveIntentionNotes}
-                    className="intention-notes" />
 
-                  <div className="detail-section-label" style={{ marginTop: 20 }}>Projections</div>
-                  <div className="projection-grid">
-                    <div className="projection-item">
-                      <span className="proj-label">Streak forecast</span>
-                      <span className="proj-value">{getStreakProjection(selectedDate)} days</span>
-                    </div>
-                    {activeHabitIds.includes('running') && (
+                  {/* Pregnancy info for this future date */}
+                  {(() => {
+                    if (!settings?.trackPregnancy || !settings?.lmpDate) return null;
+                    const futurePreg = getPregnancyInfoAtDate(settings.lmpDate, selectedDate, settings.cycleLength || 28);
+                    if (!futurePreg || futurePreg.weeks < 1) return null;
+                    return (
+                      <div className="future-pregnancy">
+                        <div className="future-preg-header">
+                          <span className="future-preg-badge">{futurePreg.weeks}w {futurePreg.days}d</span>
+                          <span className="future-preg-trimester">Trimester {futurePreg.trimester}</span>
+                        </div>
+                        <div className="future-preg-info">
+                          <div className="future-preg-row">
+                            <span className="detail-icon">👶</span>
+                            <div><h4>Baby</h4><p>{futurePreg.baby}</p></div>
+                          </div>
+                          <div className="future-preg-row">
+                            <span className="detail-icon">💜</span>
+                            <div><h4>What She May Be Feeling</h4><p>{futurePreg.mom}</p></div>
+                          </div>
+                        </div>
+                        {futurePreg.upcomingMilestones?.length > 0 && (
+                          <div className="future-milestones">
+                            <h4 className="milestones-title">Key Dates Coming Up</h4>
+                            {futurePreg.upcomingMilestones.map((m, i) => (
+                              <div key={i} className="milestone-item">
+                                <span className="milestone-emoji">{m.emoji}</span>
+                                <span className="milestone-week">Week {m.week}</span>
+                                <span className="milestone-label">{m.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Miles projection */}
+                  {activeHabitIds.includes('running') && (
+                    <div className="projection-grid" style={{ marginTop: 16 }}>
                       <div className="projection-item">
-                        <span className="proj-label">Est. total miles</span>
+                        <span className="proj-label">Est. total miles by then</span>
                         <span className="proj-value">{getMilesProjection(selectedDate).toFixed(1)} mi</span>
                       </div>
-                    )}
-                    {(() => {
-                      const futurePreg = getPregnancyAtDate(selectedDate);
-                      if (!futurePreg) return null;
-                      return (
-                        <div className="projection-item">
-                          <span className="proj-label">Pregnancy</span>
-                          <span className="proj-value">{futurePreg.weeks}w {futurePreg.days}d ({futurePreg.percent}%)</span>
-                        </div>
-                      );
-                    })()}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -917,15 +935,24 @@ export default function Home() {
             <div className="view-content">
               {/* Overall */}
               <div className="stats-overall">
-                <div className="card stat-card main-stat">
-                  <div className="stat-label">Current Streak</div>
-                  <div className="stat-value large">{getStreak()}</div>
-                  <div className="stat-unit">days</div>
-                </div>
                 <div className="card stat-card">
                   <div className="stat-label">Completion</div>
                   <div className="stat-value">{getCompletionRate()}%</div>
                 </div>
+                {PILLARS.body.habits.some(h => activeHabitIds.includes(h.id)) && (
+                  <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.body.color}` }}>
+                    <div className="stat-label">Body Streak</div>
+                    <div className="stat-value">{getPillarStreak('body')}</div>
+                    <div className="stat-unit">days</div>
+                  </div>
+                )}
+                {PILLARS.soul.habits.some(h => activeHabitIds.includes(h.id)) && (
+                  <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.soul.color}` }}>
+                    <div className="stat-label">Soul Streak</div>
+                    <div className="stat-value">{getPillarStreak('soul')}</div>
+                    <div className="stat-unit">days</div>
+                  </div>
+                )}
               </div>
 
               {/* Body Stats */}
@@ -1045,7 +1072,11 @@ export default function Home() {
 
         /* Header */
         .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; max-width: 680px; margin: 0 auto; }
-        .logo { font-family: 'Crimson Pro', serif; font-size: 1.6rem; font-weight: 400; }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); }
+        .header-info { display: flex; flex-direction: column; }
+        .header-welcome { font-family: 'Crimson Pro', serif; font-size: 1.1rem; font-weight: 400; color: rgba(255,255,255,0.85); }
+        .header-pregnancy { font-size: 0.75rem; color: #e879f9; margin-top: 2px; }
         .settings-btn { background: rgba(255,255,255,0.08); border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 1rem; transition: background 0.2s; }
         .settings-btn:hover { background: rgba(255,255,255,0.15); }
 
@@ -1109,6 +1140,7 @@ export default function Home() {
         /* Pregnancy in Mind pillar */
         .pregnancy-section { margin-bottom: 14px; }
         .pregnancy-top-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+        .pregnancy-due-date { font-size: 0.78rem; color: rgba(232, 121, 249, 0.7); margin-bottom: 8px; }
         .pregnancy-week-badge { font-family: 'Crimson Pro', serif; font-size: 1.1rem; font-weight: 500; color: #e879f9; white-space: nowrap; }
         .pregnancy-progress-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
         .pregnancy-progress-bar { flex: 1; height: 8px; background: rgba(232, 121, 249, 0.15); border-radius: 4px; overflow: hidden; }
@@ -1204,13 +1236,14 @@ export default function Home() {
         .calendar-day.future { color: rgba(255,255,255,0.4); }
         .journal-dot { position: absolute; bottom: 4px; right: 4px; width: 5px; height: 5px; background: #f59e0b; border-radius: 50%; }
         .intent-dot { position: absolute; bottom: 4px; left: 4px; width: 5px; height: 5px; background: #a78bfa; border-radius: 50%; }
+        .milestone-dot { position: absolute; top: 4px; left: 4px; width: 5px; height: 5px; background: #e879f9; border-radius: 50%; }
         .calendar-legend { display: flex; gap: 16px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
         .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: rgba(255,255,255,0.4); }
         .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
         .legend-dot.complete { background: rgba(34, 197, 94, 0.4); }
         .legend-dot.partial { background: rgba(102, 126, 234, 0.4); }
         .legend-dot.journal { width: 7px; height: 7px; background: #f59e0b; border-radius: 50%; }
-        .legend-dot.intent { width: 7px; height: 7px; background: #a78bfa; border-radius: 50%; }
+        .legend-dot.milestone { width: 7px; height: 7px; background: #e879f9; border-radius: 50%; }
 
         /* Calendar Detail */
         .calendar-detail { margin-bottom: 16px; }
@@ -1239,10 +1272,30 @@ export default function Home() {
         .proj-label { font-size: 0.82rem; color: rgba(255,255,255,0.5); }
         .proj-value { font-family: 'Crimson Pro', serif; font-size: 1rem; color: rgba(255,255,255,0.85); }
 
+        /* Future pregnancy */
+        .future-pregnancy { margin-bottom: 12px; }
+        .future-preg-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .future-preg-badge { font-family: 'Crimson Pro', serif; font-size: 1.1rem; font-weight: 500; color: #e879f9; }
+        .future-preg-trimester { font-size: 0.78rem; color: rgba(232, 121, 249, 0.6); background: rgba(232, 121, 249, 0.1); padding: 3px 10px; border-radius: 12px; }
+        .future-preg-info { display: flex; flex-direction: column; gap: 10px; }
+        .future-preg-row { display: flex; gap: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 10px; }
+        .future-preg-row h4 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
+        .future-preg-row p { font-size: 0.85rem; color: rgba(255,255,255,0.7); line-height: 1.5; }
+        .future-milestones { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .milestones-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(232, 121, 249, 0.6); margin-bottom: 10px; }
+        .milestone-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 0.85rem; }
+        .milestone-emoji { font-size: 1rem; }
+        .milestone-week { font-weight: 600; color: #e879f9; min-width: 60px; }
+        .milestone-label { color: rgba(255,255,255,0.7); }
+
+        /* Support tip in reminder */
+        .reminder-support-tip { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(245, 158, 11, 0.15); }
+        .support-tip-icon { flex-shrink: 0; font-size: 1rem; }
+        .support-tip-text { font-size: 0.82rem; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0; }
+
         /* Stats */
-        .stats-overall { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .stats-overall { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; }
         .stat-card { text-align: center; padding: 24px 16px; }
-        .stat-card.main-stat { background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); }
         .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
         .stat-value { font-family: 'Crimson Pro', serif; font-size: 2.2rem; font-weight: 300; }
         .stat-value.large { font-size: 3rem; }

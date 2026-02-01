@@ -11,10 +11,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { audio, apiKey } = req.body;
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'Server configuration error: missing OpenAI API key' });
+  }
 
-  if (!audio || !apiKey) {
-    return res.status(400).json({ error: 'Audio data and API key required' });
+  const { audio } = req.body;
+
+  if (!audio) {
+    return res.status(400).json({ error: 'Audio data required' });
   }
 
   try {
@@ -54,7 +58,7 @@ export default async function handler(req, res) {
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
       },
       body: body,
