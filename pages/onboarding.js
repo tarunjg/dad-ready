@@ -193,14 +193,14 @@ export default function Onboarding() {
                     <span>🧠</span>
                     <div>
                       <strong>Mind</strong>
-                      <p>Stay informed on your partner's pregnancy and prepare mentally for fatherhood</p>
+                      <p>Meditation, gratitude, pregnancy tracking, and the mental clarity fatherhood demands</p>
                     </div>
                   </div>
                   <div className="benefit">
-                    <span>🧘</span>
+                    <span>🕊</span>
                     <div>
                       <strong>Soul</strong>
-                      <p>Cultivate gratitude, reflection, and the emotional resilience your family needs</p>
+                      <p>Daily spiritual wisdom from contemplative traditions to ground you through uncertainty</p>
                     </div>
                   </div>
                 </div>
