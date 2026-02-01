@@ -134,24 +134,40 @@ export default function Home() {
     setIntentionInput(intent?.notes || '');
   }, [selectedDate, data]);
 
-  // YouTube IFrame API
+  // YouTube IFrame API — robust initialization
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.YT) return;
 
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    document.head.appendChild(tag);
-
-    window.onYouTubeIframeAPIReady = () => {
+    const createPlayer = () => {
+      if (ytPlayerRef.current) return;
       ytPlayerRef.current = new window.YT.Player('yt-player-container', {
         videoId: 'A4ZK0vt8GQU',
-        playerVars: { autoplay: 0, loop: 1, playlist: 'A4ZK0vt8GQU' },
+        playerVars: { autoplay: 0, loop: 1, playlist: 'A4ZK0vt8GQU', origin: window.location.origin },
         events: {
-          onReady: () => {},
+          onReady: () => { console.log('YT player ready'); },
+          onError: (e) => { console.error('YT player error:', e.data); }
         }
       });
     };
+
+    if (window.YT && window.YT.Player) {
+      createPlayer();
+    } else {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+      window.onYouTubeIframeAPIReady = createPlayer;
+    }
+  }, []);
+
+  // Time-of-day background
+  const [timeOfDay, setTimeOfDay] = useState('night');
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 11) setTimeOfDay('morning');
+    else if (hour >= 11 && hour < 17) setTimeOfDay('day');
+    else if (hour >= 17 && hour < 21) setTimeOfDay('evening');
+    else setTimeOfDay('night');
   }, []);
 
   // Active habits from settings
@@ -219,7 +235,11 @@ export default function Home() {
 
   // Audio controls
   const toggleAudio = () => {
-    if (!ytPlayerRef.current) return;
+    if (!ytPlayerRef.current || typeof ytPlayerRef.current.playVideo !== 'function') {
+      // Fallback: open YouTube in new tab if player isn't ready
+      window.open('https://www.youtube.com/watch?v=A4ZK0vt8GQU', '_blank');
+      return;
+    }
     if (audioPlaying) {
       ytPlayerRef.current.pauseVideo();
     } else {
@@ -604,7 +624,7 @@ export default function Home() {
       </div>
 
       <div className="app">
-        <div className="background" />
+        <div className={`background ${timeOfDay}`} />
 
         <header className="header">
           <div className="header-left">
@@ -1123,8 +1143,15 @@ export default function Home() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', -apple-system, sans-serif; background: #1a1a2e; }
         .app { min-height: 100vh; position: relative; color: #fff; }
-        .background { position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); z-index: -2; }
-        .background::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 60%; background: linear-gradient(180deg, rgba(102, 126, 234, 0.15) 0%, transparent 100%); }
+        .background { position: fixed; inset: 0; z-index: -2; transition: background 1s ease; }
+        .background.night { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); }
+        .background.night::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 60%; background: linear-gradient(180deg, rgba(102, 126, 234, 0.15) 0%, transparent 100%); }
+        .background.morning { background: linear-gradient(135deg, #1a1a2e 0%, #2d1b3d 30%, #4a2040 60%, #c0584f 85%, #e8956a 100%); }
+        .background.morning::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 60%; background: linear-gradient(180deg, rgba(232, 149, 106, 0.2) 0%, transparent 100%); }
+        .background.day { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); }
+        .background.day::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 60%; background: linear-gradient(180deg, rgba(102, 126, 234, 0.15) 0%, transparent 100%); }
+        .background.evening { background: linear-gradient(135deg, #1a1a2e 0%, #2d1b3d 30%, #3d1f4e 50%, #7b3f5e 75%, #c46050 100%); }
+        .background.evening::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 60%; background: linear-gradient(180deg, rgba(196, 96, 80, 0.2) 0%, transparent 100%); }
 
         /* Header */
         .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; max-width: 680px; margin: 0 auto; }
