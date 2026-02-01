@@ -63,22 +63,22 @@ export default function Home() {
   }, [data, mounted]);
 
   useEffect(() => {
-    if (data.gratitude[selectedDate]) {
+    if (data?.gratitude?.[selectedDate]) {
       setGratitudeInput(data.gratitude[selectedDate]);
     } else {
       setGratitudeInput(['', '', '']);
     }
-    if (data.runningMiles[selectedDate]) {
+    if (data?.runningMiles?.[selectedDate]) {
       setMilesInput(data.runningMiles[selectedDate].toString());
     } else {
       setMilesInput('');
     }
-    if (data.journal[selectedDate]) {
+    if (data?.journal?.[selectedDate]) {
       setJournalInput(data.journal[selectedDate]);
     } else {
       setJournalInput('');
     }
-  }, [selectedDate, data.gratitude, data.runningMiles, data.journal]);
+  }, [selectedDate, data]);
 
   const toggleHabit = (habitId) => {
     if (habitId === 'running' || habitId === 'gratitude') return;
