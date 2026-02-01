@@ -856,13 +856,24 @@ export default function Home() {
                       <div className="month-milestones">
                         {monthMilestones.map((m, i) => (
                           <div key={i} className="month-milestone-item">
-                            <span className="month-milestone-emoji">{m.emoji}</span>
-                            <div className="month-milestone-info">
-                              <span className="month-milestone-week">Week {m.week} — {m.label}</span>
-                              <span className="month-milestone-date">
-                                {m.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </span>
+                            <div className="milestone-header-row">
+                              <span className="month-milestone-emoji">{m.emoji}</span>
+                              <div className="milestone-header-info">
+                                <span className="month-milestone-week">{m.label}</span>
+                                <span className="month-milestone-date">
+                                  {m.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} — Week {m.week}
+                                </span>
+                              </div>
                             </div>
+                            {m.description && (
+                              <p className="milestone-description">{m.description}</p>
+                            )}
+                            {m.couple && (
+                              <div className="milestone-couple">
+                                <span className="milestone-couple-icon">👫</span>
+                                <p className="milestone-couple-text">{m.couple}</p>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -980,10 +991,19 @@ export default function Home() {
                           <div className="future-milestones">
                             <h4 className="milestones-title">Key Dates Coming Up</h4>
                             {futurePreg.upcomingMilestones.map((m, i) => (
-                              <div key={i} className="milestone-item">
-                                <span className="milestone-emoji">{m.emoji}</span>
-                                <span className="milestone-week">Week {m.week}</span>
-                                <span className="milestone-label">{m.label}</span>
+                              <div key={i} className="future-milestone-detail">
+                                <div className="milestone-item">
+                                  <span className="milestone-emoji">{m.emoji}</span>
+                                  <span className="milestone-week">Week {m.week}</span>
+                                  <span className="milestone-label">{m.label}</span>
+                                </div>
+                                {m.description && <p className="milestone-description">{m.description}</p>}
+                                {m.couple && (
+                                  <div className="milestone-couple">
+                                    <span className="milestone-couple-icon">👫</span>
+                                    <p className="milestone-couple-text">{m.couple}</p>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -1370,6 +1390,8 @@ export default function Home() {
         .milestone-emoji { font-size: 1rem; }
         .milestone-week { font-weight: 600; color: #e879f9; min-width: 60px; }
         .milestone-label { color: rgba(255,255,255,0.7); }
+        .future-milestone-detail { padding: 14px; background: rgba(232, 121, 249, 0.06); border-radius: 10px; margin-bottom: 10px; }
+        .future-milestone-detail .milestone-item { padding: 0 0 8px 0; }
 
         /* Save confirmation flash */
         .saved-flash { color: #22c55e; font-size: 0.78rem; font-weight: 500; animation: flashIn 0.3s ease; }
@@ -1383,12 +1405,17 @@ export default function Home() {
           border-radius: 16px; padding: 20px 22px; margin-top: 16px;
         }
         .this-month-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(232, 121, 249, 0.7); margin-bottom: 14px; font-weight: 600; }
-        .month-milestones { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-        .month-milestone-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(232, 121, 249, 0.06); border-radius: 10px; }
-        .month-milestone-emoji { font-size: 1.1rem; flex-shrink: 0; }
-        .month-milestone-info { display: flex; flex-direction: column; gap: 2px; }
-        .month-milestone-week { font-size: 0.85rem; color: rgba(255,255,255,0.8); }
-        .month-milestone-date { font-size: 0.72rem; color: rgba(232, 121, 249, 0.6); }
+        .month-milestones { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
+        .month-milestone-item { padding: 16px; background: rgba(232, 121, 249, 0.06); border-radius: 12px; border-left: 3px solid rgba(232, 121, 249, 0.3); }
+        .milestone-header-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .month-milestone-emoji { font-size: 1.3rem; flex-shrink: 0; }
+        .milestone-header-info { display: flex; flex-direction: column; gap: 2px; }
+        .month-milestone-week { font-size: 0.92rem; color: rgba(255,255,255,0.9); font-weight: 500; }
+        .month-milestone-date { font-size: 0.78rem; color: #e879f9; font-weight: 500; }
+        .milestone-description { font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 10px; }
+        .milestone-couple { display: flex; gap: 10px; padding: 12px; background: rgba(232, 121, 249, 0.08); border-radius: 10px; }
+        .milestone-couple-icon { font-size: 1rem; flex-shrink: 0; }
+        .milestone-couple-text { font-size: 0.82rem; color: rgba(255,255,255,0.7); line-height: 1.5; margin: 0; font-style: italic; }
         .month-no-milestones { font-size: 0.85rem; color: rgba(255,255,255,0.4); margin-bottom: 14px; font-style: italic; }
         .month-tip { display: flex; gap: 10px; padding-top: 14px; border-top: 1px solid rgba(232, 121, 249, 0.15); }
         .support-tip-icon { flex-shrink: 0; font-size: 1rem; }
