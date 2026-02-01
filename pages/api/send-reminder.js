@@ -9,7 +9,6 @@ export default async function handler(req, res) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dad-ready.vercel.app';
 
   if (!accountSid || !authToken || !twilioPhone || !myPhone) {
-    console.error('Missing environment variables');
     return res.status(500).json({ error: 'Missing configuration' });
   }
 
@@ -31,11 +30,8 @@ Time to check in: ${appUrl}
       from: twilioPhone,
       to: myPhone
     });
-
-    console.log('Message sent:', result.sid);
     return res.status(200).json({ success: true, messageSid: result.sid });
   } catch (error) {
-    console.error('Twilio error:', error);
     return res.status(500).json({ error: error.message });
   }
 }

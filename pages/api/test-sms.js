@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   }
 
   const { secret } = req.body;
-  
   if (secret !== process.env.TEST_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -19,24 +18,14 @@ export default async function handler(req, res) {
 
   const client = twilio(accountSid, authToken);
 
-  const message = `🧪 Dad Ready - Test Message
-
-This is a test! If you got this, your daily reminders are set up correctly.
-
-App: ${appUrl}
-
-💪 Let's go.`;
-
   try {
     const result = await client.messages.create({
-      body: message,
+      body: `🧪 Dad Ready - Test Message\n\nThis is a test! If you got this, your daily reminders are set up correctly.\n\nApp: ${appUrl}\n\n💪 Let's go.`,
       from: twilioPhone,
       to: myPhone
     });
-
     return res.status(200).json({ success: true, messageSid: result.sid });
   } catch (error) {
-    console.error('Twilio error:', error);
     return res.status(500).json({ error: error.message });
   }
 }
