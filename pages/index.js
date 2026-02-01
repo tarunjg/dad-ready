@@ -3,13 +3,15 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import Head from 'next/head';
 import { getQuoteByDay } from '../lib/quotes';
-import { getDailyTip, getPregnancyPercentage, getEstimatedDueDate, getPregnancyInfoAtDate, pregnancyMilestones } from '../lib/pregnancy';
+import { getDailyTip, getPregnancyPercentage, getEstimatedDueDate, getPregnancyInfoAtDate, pregnancyMilestones, getWeeklyAction } from '../lib/pregnancy';
 import { PILLARS, getAllHabits, getTotalCompletion, getPillarCompletion, migrateSettings } from '../lib/pillars';
 
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const ytPlayerRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Core state
   const [settings, setSettings] = useState(null);
@@ -17,8 +19,7 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(() => {
     if (typeof window === 'undefined') return '2026-02-01';
     const today = new Date().toISOString().split('T')[0];
-    if (today >= '2026-02-01' && today <= '2026-02-28') return today;
-    return '2026-02-01';
+    return today;
   });
   const [view, setView] = useState('today');
   const [mounted, setMounted] = useState(false);
@@ -26,29 +27,22 @@ export default function Home() {
   // Inputs
   const [gratitudeInput, setGratitudeInput] = useState(['', '', '']);
   const [milesInput, setMilesInput] = useState('');
-  const [reflectionInput, setReflectionInput] = useState('');
 
   // Pregnancy
   const [pregnancyInfo, setPregnancyInfo] = useState(null);
   const [pregnancyPercent, setPregnancyPercent] = useState(null);
   const [pregnancyExpanded, setPregnancyExpanded] = useState(false);
 
+  // Weekly action
+  const [weeklyActionDone, setWeeklyActionDone] = useState(false);
+
   // Reminders (formerly wins)
   const [reminders, setReminders] = useState([]);
   const [currentReminder, setCurrentReminder] = useState(null);
   const [loadingReminders, setLoadingReminders] = useState(false);
 
-  // Audio & Recording
+  // Audio
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [transcribing, setTranscribing] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const recordingTimerRef = useRef(null);
-
-  // Voice notes
-  const [voiceNotes, setVoiceNotes] = useState([]);
 
   // Save confirmations
   const [savedSection, setSavedSection] = useState(null);
@@ -59,18 +53,53 @@ export default function Home() {
     savedTimerRef.current = setTimeout(() => setSavedSection(null), 2000);
   };
 
-  // Calendar intentions
-  const [intentionInput, setIntentionInput] = useState('');
-  const [intentionGoals, setIntentionGoals] = useState([]);
-  const [newGoalInput, setNewGoalInput] = useState('');
+  // Coach state
+  const [coachOpen, setCoachOpen] = useState(false);
+  const [coachConversations, setCoachConversations] = useState([]);
+  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [coachInput, setCoachInput] = useState('');
+  const [coachSending, setCoachSending] = useState(false);
+  const [showCoachThreads, setShowCoachThreads] = useState(false);
+  const [coachImageAttachments, setCoachImageAttachments] = useState([]);
 
-  const february2026 = Array.from({ length: 28 }, (_, i) => {
-    const date = new Date(2026, 1, i + 1);
-    return date.toISOString().split('T')[0];
-  });
+  // Coach voice recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+
+  // Milestones sidebar checkboxes
+  const [checkedMilestones, setCheckedMilestones] = useState(new Set());
+
+  // Calendar month navigation
+  const [calendarMonth, setCalendarMonth] = useState(1); // February = 1 (0-indexed)
+  const [calendarYear, setCalendarYear] = useState(2026);
 
   const today = typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '2026-02-01';
-  const isFutureDate = selectedDate > today;
+
+  // Generate days for any month
+  function getMonthDays(year, month) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const date = new Date(year, month, i + 1);
+      return date.toISOString().split('T')[0];
+    });
+  }
+
+  // All February days (for stats/streaks that still reference Feb)
+  const february2026 = getMonthDays(2026, 1);
+
+  // All days from Feb to current calendar month for broader stat calculations
+  function getAllDaysUpToToday() {
+    const days = [];
+    for (let m = 1; m <= 5; m++) { // Feb through Jun
+      const monthDays = getMonthDays(2026, m);
+      days.push(...monthDays.filter(d => d <= today));
+    }
+    return days;
+  }
 
   // Auth redirect
   useEffect(() => {
@@ -91,9 +120,13 @@ export default function Home() {
         setPregnancyInfo(info);
         const pct = getPregnancyPercentage(parsed.lmpDate, parsed.cycleLength || 28);
         setPregnancyPercent(pct);
+
+        // Load weekly action state
+        const actionKey = `dadReadyWeeklyAction_${info.weeks}`;
+        setWeeklyActionDone(localStorage.getItem(actionKey) === 'true');
       }
 
-      // Load reminders (migrating from old wins key)
+      // Load reminders
       const savedReminders = localStorage.getItem('dadReadyReminders') || localStorage.getItem('dadReadyWins');
       if (savedReminders) {
         const arr = JSON.parse(savedReminders);
@@ -111,6 +144,23 @@ export default function Home() {
     } else {
       setData({ habits: {}, runningMiles: {}, gratitude: {}, journal: {}, reflections: {}, intentions: {} });
     }
+
+    // Load coach conversations
+    const savedConvos = localStorage.getItem('dadReadyCoachConversations');
+    if (savedConvos) {
+      const parsed = JSON.parse(savedConvos);
+      setCoachConversations(parsed);
+      if (parsed.length > 0) setActiveConversationId(parsed[0].id);
+    }
+
+    // Load checked milestones
+    const savedChecked = localStorage.getItem('dadReadyCheckedMilestones');
+    if (savedChecked) setCheckedMilestones(new Set(JSON.parse(savedChecked)));
+
+    // Check if opened with ?coach=open
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('coach') === 'open') {
+      setCoachOpen(true);
+    }
   }, [router]);
 
   // Persist data
@@ -120,24 +170,30 @@ export default function Home() {
     }
   }, [data, mounted]);
 
+  // Persist coach conversations
+  useEffect(() => {
+    if (mounted && coachConversations.length > 0) {
+      localStorage.setItem('dadReadyCoachConversations', JSON.stringify(coachConversations));
+    }
+  }, [coachConversations, mounted]);
+
   // Load date-specific inputs
   useEffect(() => {
     if (!data) return;
     setGratitudeInput(data.gratitude?.[selectedDate] || ['', '', '']);
     setMilesInput(data.runningMiles?.[selectedDate]?.toString() || '');
-    setReflectionInput(data.reflections?.[selectedDate]?.text || data.journal?.[selectedDate] || '');
-    setVoiceNotes(data.reflections?.[selectedDate]?.voiceNotes || []);
-
-    // Load intentions for future dates
-    const intent = data.intentions?.[selectedDate];
-    setIntentionGoals(intent?.goals || []);
-    setIntentionInput(intent?.notes || '');
   }, [selectedDate, data]);
 
-  // YouTube IFrame API — robust initialization
+  // Scroll coach messages
+  useEffect(() => {
+    if (coachOpen && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [coachConversations, activeConversationId, coachOpen]);
+
+  // YouTube IFrame API
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const createPlayer = () => {
       if (ytPlayerRef.current) return;
       ytPlayerRef.current = new window.YT.Player('yt-player-container', {
@@ -149,7 +205,6 @@ export default function Home() {
         }
       });
     };
-
     if (window.YT && window.YT.Player) {
       createPlayer();
     } else {
@@ -216,27 +271,29 @@ export default function Home() {
     flashSaved('gratitude');
   };
 
-  const saveReflection = useCallback(() => {
-    setData(prev => ({
-      ...prev,
-      reflections: {
-        ...prev.reflections,
-        [selectedDate]: {
-          ...prev.reflections?.[selectedDate],
-          text: reflectionInput,
-          voiceNotes: voiceNotes,
-          savedAt: new Date().toISOString()
-        }
-      },
-      journal: { ...prev.journal, [selectedDate]: reflectionInput }
-    }));
-    flashSaved('reflection');
-  }, [reflectionInput, voiceNotes, selectedDate]);
+  // Weekly action toggle
+  const toggleWeeklyAction = () => {
+    const newVal = !weeklyActionDone;
+    setWeeklyActionDone(newVal);
+    if (pregnancyInfo) {
+      localStorage.setItem(`dadReadyWeeklyAction_${pregnancyInfo.weeks}`, newVal.toString());
+    }
+  };
+
+  // Milestone checkbox toggle
+  const toggleMilestone = (milestoneKey) => {
+    setCheckedMilestones(prev => {
+      const next = new Set(prev);
+      if (next.has(milestoneKey)) next.delete(milestoneKey);
+      else next.add(milestoneKey);
+      localStorage.setItem('dadReadyCheckedMilestones', JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   // Audio controls
   const toggleAudio = () => {
     if (!ytPlayerRef.current || typeof ytPlayerRef.current.playVideo !== 'function') {
-      // Fallback: open YouTube in new tab if player isn't ready
       window.open('https://www.youtube.com/watch?v=A4ZK0vt8GQU', '_blank');
       return;
     }
@@ -248,27 +305,140 @@ export default function Home() {
     setAudioPlaying(!audioPlaying);
   };
 
-  // Voice recording
+  // ── Coach Functions ──
+  const activeConversation = coachConversations.find(c => c.id === activeConversationId);
+
+  const createNewConversation = () => {
+    const newConvo = {
+      id: Date.now().toString(),
+      title: 'New conversation',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: []
+    };
+    setCoachConversations(prev => [newConvo, ...prev]);
+    setActiveConversationId(newConvo.id);
+    setShowCoachThreads(false);
+  };
+
+  const deleteConversation = (id) => {
+    setCoachConversations(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      if (activeConversationId === id) {
+        setActiveConversationId(updated.length > 0 ? updated[0].id : null);
+      }
+      return updated;
+    });
+  };
+
+  const handleCoachImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => setCoachImageAttachments(prev => [...prev, reader.result]);
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const sendCoachMessage = async () => {
+    if ((!coachInput.trim() && coachImageAttachments.length === 0) || coachSending) return;
+    let convoId = activeConversationId;
+    if (!convoId) {
+      const newConvo = {
+        id: Date.now().toString(),
+        title: 'New conversation',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: []
+      };
+      setCoachConversations(prev => [newConvo, ...prev]);
+      convoId = newConvo.id;
+      setActiveConversationId(convoId);
+    }
+
+    const userMessage = {
+      role: 'user',
+      content: coachInput,
+      images: coachImageAttachments.length > 0 ? coachImageAttachments : undefined,
+      timestamp: new Date().toISOString()
+    };
+
+    setCoachConversations(prev => prev.map(c => {
+      if (c.id === convoId) {
+        return { ...c, messages: [...c.messages, userMessage], updatedAt: new Date().toISOString() };
+      }
+      return c;
+    }));
+
+    const currentInput = coachInput;
+    setCoachInput('');
+    setCoachImageAttachments([]);
+    setCoachSending(true);
+
+    try {
+      const currentConvo = coachConversations.find(c => c.id === convoId);
+      const allMessages = [...(currentConvo?.messages || []), userMessage];
+      const recentMessages = allMessages.slice(-20);
+
+      const pregnancyContext = pregnancyInfo ? { weeks: pregnancyInfo.weeks, days: pregnancyInfo.days, trimester: pregnancyInfo.trimester } : null;
+
+      const res = await fetch('/api/coach-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: recentMessages.map(m => ({ role: m.role, content: m.content, images: m.images })),
+          pregnancyContext
+        })
+      });
+
+      if (res.ok) {
+        const { reply } = await res.json();
+        const assistantMessage = { role: 'assistant', content: reply, timestamp: new Date().toISOString() };
+        setCoachConversations(prev => prev.map(c => {
+          if (c.id === convoId) {
+            const updated = { ...c, messages: [...c.messages, assistantMessage], updatedAt: new Date().toISOString() };
+            if (c.messages.length <= 1 && c.title === 'New conversation') {
+              updated.title = currentInput.slice(0, 40) + (currentInput.length > 40 ? '...' : '');
+            }
+            return updated;
+          }
+          return c;
+        }));
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        alert('Coach error: ' + err.error);
+      }
+    } catch (err) {
+      console.error('Coach chat error:', err);
+      alert('Failed to reach the coach. Please try again.');
+    }
+    setCoachSending(false);
+  };
+
+  // Voice recording for coach
+  const blobToBase64 = (blob) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       audioChunksRef.current = [];
-
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         clearInterval(recordingTimerRef.current);
-        const duration = recordingDuration;
         setRecordingDuration(0);
-
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const base64 = await blobToBase64(blob);
-
-        // Transcribe
         setTranscribing(true);
         try {
           const res = await fetch('/api/transcribe', {
@@ -276,20 +446,9 @@ export default function Home() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ audio: base64.split(',')[1] })
           });
-
           if (res.ok) {
             const { text } = await res.json();
-            const newNote = {
-              id: Date.now().toString(),
-              timestamp: new Date().toISOString(),
-              transcript: text,
-              duration: duration
-            };
-            const updated = [...voiceNotes, newNote];
-            setVoiceNotes(updated);
-
-            // Also append to reflection text
-            setReflectionInput(prev => prev ? `${prev}\n\n[Voice note]: ${text}` : `[Voice note]: ${text}`);
+            setCoachInput(prev => prev ? `${prev} ${text}` : text);
           } else {
             const err = await res.json();
             alert(`Transcription failed: ${err.error}`);
@@ -300,14 +459,11 @@ export default function Home() {
         }
         setTranscribing(false);
       };
-
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordingDuration(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
+      recordingTimerRef.current = setInterval(() => setRecordingDuration(prev => prev + 1), 1000);
     } catch (err) {
       console.error('Microphone access denied:', err);
       alert('Microphone access is required for voice notes.');
@@ -321,40 +477,18 @@ export default function Home() {
     }
   };
 
-  const blobToBase64 = (blob) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  const deleteVoiceNote = (noteId) => {
-    setVoiceNotes(prev => prev.filter(n => n.id !== noteId));
-  };
-
-  // Reminders (formerly wins)
+  // Reminders
   const loadRemindersFromDocs = async () => {
     if (!settings?.docUrls?.length) return;
     setLoadingReminders(true);
     const allReminders = [];
-
     for (const url of settings.docUrls) {
       if (!url.trim()) continue;
       try {
-        const docRes = await fetch('/api/fetch-doc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ docUrl: url })
-        });
+        const docRes = await fetch('/api/fetch-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docUrl: url }) });
         if (!docRes.ok) continue;
         const docData = await docRes.json();
-
-        const remRes = await fetch('/api/extract-wins', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: docData.content, title: docData.title })
-        });
+        const remRes = await fetch('/api/extract-wins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: docData.content, title: docData.title }) });
         if (remRes.ok) {
           const remData = await remRes.json();
           allReminders.push(...remData.wins);
@@ -363,7 +497,6 @@ export default function Home() {
         console.error('Error loading reminders:', error);
       }
     }
-
     if (allReminders.length > 0) {
       setReminders(allReminders);
       setCurrentReminder(allReminders[Math.floor(Math.random() * allReminders.length)]);
@@ -377,43 +510,6 @@ export default function Home() {
       const idx = reminders.indexOf(currentReminder);
       setCurrentReminder(reminders[(idx + 1) % reminders.length]);
     }
-  };
-
-  // Intentions (for future dates)
-  const addIntentionGoal = () => {
-    if (!newGoalInput.trim()) return;
-    const updated = [...intentionGoals, newGoalInput.trim()];
-    setIntentionGoals(updated);
-    setNewGoalInput('');
-    setData(prev => ({
-      ...prev,
-      intentions: {
-        ...prev.intentions,
-        [selectedDate]: { goals: updated, notes: prev.intentions?.[selectedDate]?.notes || '' }
-      }
-    }));
-  };
-
-  const removeIntentionGoal = (idx) => {
-    const updated = intentionGoals.filter((_, i) => i !== idx);
-    setIntentionGoals(updated);
-    setData(prev => ({
-      ...prev,
-      intentions: {
-        ...prev.intentions,
-        [selectedDate]: { ...prev.intentions?.[selectedDate], goals: updated }
-      }
-    }));
-  };
-
-  const saveIntentionNotes = () => {
-    setData(prev => ({
-      ...prev,
-      intentions: {
-        ...prev.intentions,
-        [selectedDate]: { ...prev.intentions?.[selectedDate], goals: intentionGoals, notes: intentionInput }
-      }
-    }));
   };
 
   // Computed values
@@ -431,19 +527,15 @@ export default function Home() {
     return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   }
 
-  function formatDateShort(dateStr) {
-    const date = new Date(dateStr + 'T12:00:00');
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
-
   function getCurrentWeek() {
     const d = new Date(selectedDate + 'T12:00:00').getDate();
     return Math.ceil(d / 7);
   }
 
-  function getWeeklyMiles(weekNum) {
+  function getWeeklyMiles(weekNum, monthDays) {
+    const days = monthDays || february2026;
     const weekStart = (weekNum - 1) * 7;
-    return february2026.slice(weekStart, weekStart + 7).reduce((sum, d) => sum + (data?.runningMiles?.[d] || 0), 0);
+    return days.slice(weekStart, weekStart + 7).reduce((sum, d) => sum + (data?.runningMiles?.[d] || 0), 0);
   }
 
   function getTotalMiles() {
@@ -452,10 +544,10 @@ export default function Home() {
   }
 
   function getStreak() {
+    const allDays = getAllDaysUpToToday();
     let streak = 0;
-    const endIdx = february2026.indexOf(today) >= 0 ? february2026.indexOf(today) : february2026.length - 1;
-    for (let i = endIdx; i >= 0; i--) {
-      const d = february2026[i];
+    for (let i = allDays.length - 1; i >= 0; i--) {
+      const d = allDays[i];
       const dh = data?.habits?.[d] || {};
       const allDone = activeHabitIds.every(id => dh[id]);
       if (allDone && activeHabitIds.length > 0) streak++;
@@ -465,14 +557,11 @@ export default function Home() {
   }
 
   function getCompletionRate() {
-    const daysToCount = february2026.filter(d => d <= today);
-    if (daysToCount.length === 0 || activeHabitIds.length === 0) return 0;
+    const allDays = getAllDaysUpToToday();
+    if (allDays.length === 0 || activeHabitIds.length === 0) return 0;
     let done = 0, possible = 0;
-    daysToCount.forEach(d => {
-      activeHabitIds.forEach(id => {
-        possible++;
-        if (data?.habits?.[d]?.[id]) done++;
-      });
+    allDays.forEach(d => {
+      activeHabitIds.forEach(id => { possible++; if (data?.habits?.[d]?.[id]) done++; });
     });
     return possible > 0 ? Math.round((done / possible) * 100) : 0;
   }
@@ -489,21 +578,15 @@ export default function Home() {
     return (data?.reflections?.[date]?.text || data?.journal?.[date] || '').trim().length > 0;
   }
 
-  function hasIntentions(date) {
-    const intent = data?.intentions?.[date];
-    return intent && (intent.goals?.length > 0 || intent.notes?.trim());
-  }
-
-  // Pillar streak (consecutive days from today backwards)
+  // Pillar streak
   function getPillarStreak(pillarKey) {
     const pillar = PILLARS[pillarKey];
     const pillarHabitIds = pillar.habits.filter(h => activeHabitIds.includes(h.id)).map(h => h.id);
     if (pillarHabitIds.length === 0) return 0;
+    const allDays = getAllDaysUpToToday();
     let streak = 0;
-    const endIdx = february2026.indexOf(today) >= 0 ? february2026.indexOf(today) : -1;
-    if (endIdx < 0) return 0;
-    for (let i = endIdx; i >= 0; i--) {
-      const d = february2026[i];
+    for (let i = allDays.length - 1; i >= 0; i--) {
+      const d = allDays[i];
       const dh = data?.habits?.[d] || {};
       if (pillarHabitIds.every(id => dh[id])) streak++;
       else break;
@@ -511,39 +594,49 @@ export default function Home() {
     return streak;
   }
 
-  // Pillar stats for stats view
   function getPillarStats(pillarKey) {
     const pillar = PILLARS[pillarKey];
-    const daysToCount = february2026.filter(d => d <= today);
+    const allDays = getAllDaysUpToToday();
     let total = 0, done = 0;
     pillar.habits.forEach(h => {
       if (!activeHabitIds.includes(h.id)) return;
-      daysToCount.forEach(d => {
-        total++;
-        if (data?.habits?.[d]?.[h.id]) done++;
-      });
+      allDays.forEach(d => { total++; if (data?.habits?.[d]?.[h.id]) done++; });
     });
     return { total, done, rate: total > 0 ? Math.round((done / total) * 100) : 0 };
   }
 
-  // Miles projection
-  function getMilesProjection(futureDate) {
-    const totalSoFar = getTotalMiles();
-    const daysSoFar = february2026.filter(d => d <= today).length || 1;
-    const avgPerDay = totalSoFar / daysSoFar;
-    const targetDayIdx = february2026.indexOf(futureDate);
-    return totalSoFar + avgPerDay * (targetDayIdx + 1 - daysSoFar);
+  // Get milestones for a given month
+  function getMonthMilestones(year, month) {
+    if (!settings?.lmpDate) return [];
+    const lmp = new Date(settings.lmpDate);
+    const cycleLength = settings.cycleLength || 28;
+    const ovulationDay = cycleLength - 14;
+    const adjustment = ovulationDay - 14;
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
+
+    return pregnancyMilestones.map(m => {
+      const milestoneDate = new Date(lmp);
+      milestoneDate.setDate(milestoneDate.getDate() + (m.week * 7) + adjustment);
+      return { ...m, date: milestoneDate };
+    }).filter(m => m.date >= monthStart && m.date <= monthEnd);
   }
 
-  // Reflections count for stats
-  function getReflectionStats() {
-    const daysToCount = february2026.filter(d => d <= today);
-    let entries = 0, noteCount = 0;
-    daysToCount.forEach(d => {
-      if (data?.reflections?.[d]?.text || data?.journal?.[d]) entries++;
-      noteCount += (data?.reflections?.[d]?.voiceNotes?.length || 0);
-    });
-    return { entries, noteCount };
+  // Calendar month name
+  function getMonthName(year, month) {
+    return new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  // Navigate calendar
+  function prevMonth() {
+    if (calendarMonth === 1 && calendarYear === 2026) return; // Don't go before Feb 2026
+    if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(calendarYear - 1); }
+    else setCalendarMonth(calendarMonth - 1);
+  }
+  function nextMonth() {
+    if (calendarMonth === 5 && calendarYear === 2026) return; // Don't go past Jun 2026
+    if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(calendarYear + 1); }
+    else setCalendarMonth(calendarMonth + 1);
   }
 
   // Render helpers
@@ -561,7 +654,7 @@ export default function Home() {
         >
           <span className="habit-emoji">{habit.emoji}</span>
           <span className="habit-label">{habit.label}</span>
-          {dayHabits[habit.id] && <span className="habit-check" style={{ color: pillar.color }}>✓</span>}
+          {dayHabits[habit.id] && <span className="habit-check" style={{ color: pillar.color }}>&#10003;</span>}
         </div>
 
         {habit.hasInput === 'miles' && (
@@ -569,7 +662,7 @@ export default function Home() {
             <input type="number" step="0.1" placeholder="Miles today" value={milesInput}
               onChange={(e) => setMilesInput(e.target.value)} className="input-field" />
             <button onClick={saveMiles} className="save-btn">Save</button>
-            {savedSection === 'miles' && <span className="saved-flash">Saved ✓</span>}
+            {savedSection === 'miles' && <span className="saved-flash">Saved &#10003;</span>}
           </div>
         )}
 
@@ -583,7 +676,7 @@ export default function Home() {
             ))}
             <div className="gratitude-save-row">
               <button onClick={saveGratitude} className="save-btn small">Save</button>
-              {savedSection === 'gratitude' && <span className="saved-flash">Saved ✓</span>}
+              {savedSection === 'gratitude' && <span className="saved-flash">Saved &#10003;</span>}
             </div>
           </div>
         )}
@@ -609,10 +702,14 @@ export default function Home() {
 
   if (!session) return null;
 
+  // Get current month milestones for sidebar
+  const currentMonthMilestones = getMonthMilestones(2026, new Date().getMonth());
+  const weeklyAction = settings?.lmpDate ? getWeeklyAction(settings.lmpDate, settings.cycleLength || 28) : null;
+
   return (
     <>
       <Head>
-        <title>Dad Ready | February 2026</title>
+        <title>Dad Ready</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <meta name="theme-color" content="#1a1a2e" />
         <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -633,530 +730,565 @@ export default function Home() {
             )}
             <div className="header-info">
               <span className="header-welcome">Welcome, {session?.user?.name?.split(' ')[0] || 'there'}</span>
-              {pregnancyInfo && settings?.lmpDate && (
-                <span className="header-pregnancy">Your Partner Is Due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-              )}
+              <span className="header-tagline">Let's Lock In Your Inner Game</span>
             </div>
           </div>
-          <button onClick={() => router.push('/settings')} className="settings-btn">⚙️</button>
+          <div className="header-right">
+            <button onClick={toggleAudio} className={`audio-toggle ${audioPlaying ? 'playing' : ''}`}>
+              {audioPlaying ? '🔊' : '🔇'}
+            </button>
+            <button onClick={() => router.push('/settings')} className="settings-btn">&#9881;&#65039;</button>
+          </div>
         </header>
 
-        <main className="main-content">
-          {/* Inline Quote */}
-          <div className="quote-inline">
-            <p className="quote-text">"{todayQuote.text}"</p>
-            <p className="quote-author">— {todayQuote.author}</p>
-          </div>
+        <div className="layout-wrapper">
+          {/* ── MAIN CONTENT ── */}
+          <main className="main-content">
+            {/* Inline Quote */}
+            <div className="quote-inline">
+              <p className="quote-text">"{todayQuote.text}"</p>
+              <p className="quote-author">&mdash; {todayQuote.author}</p>
+            </div>
 
-          {/* Navigation */}
-          <nav className="nav-tabs">
-            {['today', 'calendar', 'stats'].map(v => (
-              <button key={v} onClick={() => setView(v)} className={`nav-tab ${view === v ? 'active' : ''}`}>
-                {v === 'today' && '☀️ '}{v === 'calendar' && '📅 '}{v === 'stats' && '📊 '}
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
-          </nav>
+            {/* Navigation */}
+            <nav className="nav-tabs">
+              {['today', 'calendar', 'stats'].map(v => (
+                <button key={v} onClick={() => setView(v)} className={`nav-tab ${view === v ? 'active' : ''}`}>
+                  {v === 'today' && '\u2600\uFE0F '}{v === 'calendar' && '\uD83D\uDCC5 '}{v === 'stats' && '\uD83D\uDCCA '}
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
+            </nav>
 
-          {/* ============ TODAY VIEW ============ */}
-          {view === 'today' && (
-            <div className="view-content">
-              <div className="day-header">
-                <h2 className="day-title">{formatDate(selectedDate)}</h2>
-                {todayTotal > 0 && <span className="day-progress">{todayCompleted}/{todayTotal}</span>}
-              </div>
-
-              {/* ── BODY PILLAR ── */}
-              {(PILLARS.body.habits.some(h => activeHabitIds.includes(h.id))) && (
-                <div className="pillar-card" style={{ borderLeftColor: PILLARS.body.borderColor }}>
-                  <div className="pillar-header">
-                    <span className="pillar-label" style={{ color: PILLARS.body.color }}>Body</span>
-                    {(() => {
-                      const { completed, total } = getPillarCompletion('body', dayHabits, activeHabitIds);
-                      return total > 0 ? <span className="pillar-count" style={{ color: PILLARS.body.color }}>{completed}/{total}</span> : null;
-                    })()}
-                  </div>
-                  <div className="habits-list">
-                    {renderPillarHabits('body')}
-                  </div>
-
-                  {/* Running progress bar */}
-                  {activeHabitIds.includes('running') && (
-                    <div className="running-inline">
-                      <div className="running-header">
-                        <span className="running-label">Week {getCurrentWeek()} Running</span>
-                        <span className="running-stat">{getWeeklyMiles(getCurrentWeek()).toFixed(1)} / {weeklyMileGoal} mi</span>
-                      </div>
-                      <div className="progress-bar-bg">
-                        <div className="progress-bar-fill" style={{
-                          width: `${Math.min((getWeeklyMiles(getCurrentWeek()) / weeklyMileGoal) * 100, 100)}%`,
-                          background: `linear-gradient(90deg, ${PILLARS.body.color}, #16a34a)`
-                        }} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── MIND PILLAR ── */}
-              <div className="pillar-card" style={{ borderLeftColor: PILLARS.mind.borderColor }}>
-                <div className="pillar-header">
-                  <span className="pillar-label" style={{ color: PILLARS.mind.color }}>Mind</span>
+            {/* ============ TODAY VIEW ============ */}
+            {view === 'today' && (
+              <div className="view-content">
+                <div className="day-header">
+                  <h2 className="day-title">{formatDate(selectedDate)}</h2>
+                  {todayTotal > 0 && <span className="day-progress">{todayCompleted}/{todayTotal}</span>}
                 </div>
 
-                {/* Pregnancy */}
-                {pregnancyInfo && pregnancyPercent && (
-                  <div className="pregnancy-section">
-                    {settings?.lmpDate && (
-                      <div className="pregnancy-due-date">
-                        Your Partner Is Due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28)
-                          .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                      </div>
-                    )}
-                    <div className="pregnancy-top-row">
-                      <span className="pregnancy-week-badge">{pregnancyInfo.weeks}w {pregnancyInfo.days}d</span>
-                      <div className="pregnancy-progress-wrap">
-                        <div className="pregnancy-progress-bar">
-                          <div className="pregnancy-progress-fill" style={{ width: `${pregnancyPercent.percent}%` }} />
-                        </div>
-                        <span className="pregnancy-pct">{pregnancyPercent.percent}%</span>
-                      </div>
+                {/* ── BODY PILLAR ── */}
+                {(PILLARS.body.habits.some(h => activeHabitIds.includes(h.id))) && (
+                  <div className="pillar-card" style={{ borderLeftColor: PILLARS.body.borderColor }}>
+                    <div className="pillar-header">
+                      <span className="pillar-label" style={{ color: PILLARS.body.color }}>Body</span>
+                      {(() => {
+                        const { completed, total } = getPillarCompletion('body', dayHabits, activeHabitIds);
+                        return total > 0 ? <span className="pillar-count" style={{ color: PILLARS.body.color }}>{completed}/{total}</span> : null;
+                      })()}
+                    </div>
+                    <div className="habits-list">
+                      {renderPillarHabits('body')}
                     </div>
 
-                    <div className="pregnancy-summary" onClick={() => setPregnancyExpanded(!pregnancyExpanded)}>
-                      <span className="pregnancy-tip-preview">
-                        {pregnancyExpanded ? 'Hide details' : pregnancyInfo.todaysTip}
-                      </span>
-                      <span className="pregnancy-toggle">{pregnancyExpanded ? '−' : '+'}</span>
-                    </div>
-
-                    {pregnancyExpanded && (
-                      <div className="pregnancy-details">
-                        <div className="pregnancy-detail-row">
-                          <span className="detail-icon">👶</span>
-                          <div><h4>Baby This Week</h4><p>{pregnancyInfo.baby}</p></div>
+                    {activeHabitIds.includes('running') && (
+                      <div className="running-inline">
+                        <div className="running-header">
+                          <span className="running-label">Week {getCurrentWeek()} Running</span>
+                          <span className="running-stat">{getWeeklyMiles(getCurrentWeek()).toFixed(1)} / {weeklyMileGoal} mi</span>
                         </div>
-                        <div className="pregnancy-detail-row">
-                          <span className="detail-icon">💜</span>
-                          <div><h4>What She May Be Feeling</h4><p>{pregnancyInfo.mom}</p></div>
-                        </div>
-                        <div className="pregnancy-detail-row highlight">
-                          <span className="detail-icon">💡</span>
-                          <div><h4>Today's Support Tip</h4><p>{pregnancyInfo.todaysTip}</p></div>
+                        <div className="progress-bar-bg">
+                          <div className="progress-bar-fill" style={{
+                            width: `${Math.min((getWeeklyMiles(getCurrentWeek()) / weeklyMileGoal) * 100, 100)}%`,
+                            background: `linear-gradient(90deg, ${PILLARS.body.color}, #16a34a)`
+                          }} />
                         </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Coach link */}
-                <button onClick={() => router.push('/coach')} className="coach-btn">
-                  💬 Ask the Pregnancy Coach
-                  <span className="coach-arrow">→</span>
-                </button>
-              </div>
-
-              {/* ── SOUL PILLAR ── */}
-              <div className="pillar-card" style={{ borderLeftColor: PILLARS.soul.borderColor }}>
-                <div className="pillar-header">
-                  <span className="pillar-label" style={{ color: PILLARS.soul.color }}>Soul</span>
-                  {(() => {
-                    const { completed, total } = getPillarCompletion('soul', dayHabits, activeHabitIds);
-                    return total > 0 ? <span className="pillar-count" style={{ color: PILLARS.soul.color }}>{completed}/{total}</span> : null;
-                  })()}
-                </div>
-                <div className="habits-list">
-                  {renderPillarHabits('soul')}
-                </div>
-
-                {/* Reflections */}
-                <div className="reflections-section">
-                  <div className="reflections-label">Reflections</div>
-                  <textarea
-                    placeholder="What's on your mind today? Let it flow..."
-                    value={reflectionInput}
-                    onChange={(e) => setReflectionInput(e.target.value)}
-                    onBlur={saveReflection}
-                    className="reflection-textarea"
-                  />
-
-                  <div className="reflection-actions">
-                    <button onClick={saveReflection} className="save-btn small">Save Reflection</button>
-                    {savedSection === 'reflection' && <span className="saved-flash">Saved ✓</span>}
-                    <button onClick={toggleAudio} className={`audio-btn ${audioPlaying ? 'playing' : ''}`}>
-                      🎵 {audioPlaying ? 'Pause Audio' : 'Ambient Audio'}
-                    </button>
-                    {typeof navigator !== 'undefined' && navigator.mediaDevices && (
-                      <button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        className={`record-btn ${isRecording ? 'recording' : ''}`}
-                        disabled={transcribing}
-                      >
-                        {transcribing ? '⏳ Transcribing...' : isRecording ? `⏹ Stop (${recordingDuration}s)` : '🎤 Record'}
-                      </button>
-                    )}
+                {/* ── MIND PILLAR ── */}
+                <div className="pillar-card" style={{ borderLeftColor: PILLARS.mind.borderColor }}>
+                  <div className="pillar-header">
+                    <span className="pillar-label" style={{ color: PILLARS.mind.color }}>Mind</span>
                   </div>
 
-                  {/* Voice notes */}
-                  {voiceNotes.length > 0 && (
-                    <div className="voice-notes-list">
-                      {voiceNotes.map(note => (
-                        <div key={note.id} className="voice-note-item">
-                          <div className="voice-note-meta">
-                            <span className="voice-note-time">
-                              {new Date(note.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            <span className="voice-note-duration">{note.duration}s</span>
-                            <button onClick={() => deleteVoiceNote(note.id)} className="voice-note-delete">×</button>
-                          </div>
-                          <p className="voice-note-transcript">"{note.transcript}"</p>
+                  {/* Pregnancy */}
+                  {pregnancyInfo && pregnancyPercent && (
+                    <div className="pregnancy-section">
+                      {settings?.lmpDate && (
+                        <div className="pregnancy-due-date">
+                          Your Partner Is Due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28)
+                            .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                         </div>
-                      ))}
+                      )}
+                      <div className="pregnancy-top-row">
+                        <span className="pregnancy-week-badge">{pregnancyInfo.weeks}w {pregnancyInfo.days}d</span>
+                        <div className="pregnancy-progress-wrap">
+                          <div className="pregnancy-progress-bar">
+                            <div className="pregnancy-progress-fill" style={{ width: `${pregnancyPercent.percent}%` }} />
+                          </div>
+                          <span className="pregnancy-pct">{pregnancyPercent.percent}%</span>
+                        </div>
+                      </div>
+
+                      <div className="pregnancy-summary" onClick={() => setPregnancyExpanded(!pregnancyExpanded)}>
+                        <span className="pregnancy-tip-preview">
+                          {pregnancyExpanded ? 'Hide details' : pregnancyInfo.todaysTip}
+                        </span>
+                        <span className="pregnancy-toggle">{pregnancyExpanded ? '\u2212' : '+'}</span>
+                      </div>
+
+                      {pregnancyExpanded && (
+                        <div className="pregnancy-details">
+                          <div className="pregnancy-detail-row">
+                            <span className="detail-icon">{'\uD83D\uDC76'}</span>
+                            <div><h4>Baby This Week</h4><p>{pregnancyInfo.baby}</p></div>
+                          </div>
+                          <div className="pregnancy-detail-row">
+                            <span className="detail-icon">{'\uD83D\uDC9C'}</span>
+                            <div><h4>What She May Be Feeling</h4><p>{pregnancyInfo.mom}</p></div>
+                          </div>
+                          <div className="pregnancy-detail-row highlight">
+                            <span className="detail-icon">{'\uD83D\uDCA1'}</span>
+                            <div><h4>Today's Support Tip</h4><p>{pregnancyInfo.todaysTip}</p></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Weekly Action Checkbox */}
+                  {weeklyAction && (
+                    <div className="weekly-action-card">
+                      <div className="weekly-action-header">
+                        <span className="weekly-action-label">{'\uD83C\uDFAF'} This Week's Action</span>
+                      </div>
+                      <div className="weekly-action-item" onClick={toggleWeeklyAction}>
+                        <span className={`weekly-action-check ${weeklyActionDone ? 'done' : ''}`}>
+                          {weeklyActionDone ? '\u2705' : '\u2B1C'}
+                        </span>
+                        <span className={`weekly-action-text ${weeklyActionDone ? 'done' : ''}`}>
+                          {weeklyAction.emoji} {weeklyAction.text}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* ── JUST A REMINDER ── */}
-              {currentReminder ? (
-                <div className="reminder-card">
-                  <div className="reminder-label">Just A Reminder</div>
-                  <p className="reminder-text">{currentReminder}</p>
-                  <button onClick={showNextReminder} className="reminder-btn">Show me another →</button>
-                </div>
-              ) : settings?.docUrls?.some(url => url.trim()) ? (
-                <div className="reminder-card">
-                  <div className="reminder-label">Just A Reminder</div>
-                  <p className="reminder-placeholder">Ready to uncover your gold.</p>
-                  <button onClick={loadRemindersFromDocs} className="action-btn" disabled={loadingReminders}>
-                    {loadingReminders ? 'Loading...' : 'Extract My Reminders'}
-                  </button>
-                </div>
-              ) : null}
-
-              {/* ── THIS MONTH ── */}
-              {pregnancyInfo && settings?.lmpDate && (
-                <div className="this-month-card">
-                  <div className="this-month-label">This Month</div>
-                  {(() => {
-                    const lmp = new Date(settings.lmpDate);
-                    const cycleLength = settings.cycleLength || 28;
-                    const ovulationDay = cycleLength - 14;
-                    const adjustment = ovulationDay - 14;
-                    const feb1 = new Date('2026-02-01');
-                    const feb28 = new Date('2026-02-28');
-
-                    const monthMilestones = pregnancyMilestones.map(m => {
-                      const milestoneDate = new Date(lmp);
-                      milestoneDate.setDate(milestoneDate.getDate() + (m.week * 7) + adjustment);
-                      return { ...m, date: milestoneDate };
-                    }).filter(m => m.date >= feb1 && m.date <= feb28);
-
-                    return monthMilestones.length > 0 ? (
-                      <div className="month-milestones">
-                        {monthMilestones.map((m, i) => (
-                          <div key={i} className="month-milestone-item">
-                            <div className="milestone-header-row">
-                              <span className="month-milestone-emoji">{m.emoji}</span>
-                              <div className="milestone-header-info">
-                                <span className="month-milestone-week">{m.label}</span>
-                                <span className="month-milestone-date">
-                                  {m.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} — Week {m.week}
-                                </span>
-                              </div>
-                            </div>
-                            {m.description && (
-                              <p className="milestone-description">{m.description}</p>
-                            )}
-                            {m.couple && (
-                              <div className="milestone-couple">
-                                <span className="milestone-couple-icon">👫</span>
-                                <p className="milestone-couple-text">{m.couple}</p>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="month-no-milestones">No major milestones this month — keep showing up.</p>
-                    );
-                  })()}
-                  <div className="month-tip">
-                    <span className="support-tip-icon">💡</span>
-                    <p className="support-tip-text">{pregnancyInfo.todaysTip}</p>
+                {/* ── SOUL PILLAR ── */}
+                <div className="pillar-card" style={{ borderLeftColor: PILLARS.soul.borderColor }}>
+                  <div className="pillar-header">
+                    <span className="pillar-label" style={{ color: PILLARS.soul.color }}>Soul</span>
+                    {(() => {
+                      const { completed, total } = getPillarCompletion('soul', dayHabits, activeHabitIds);
+                      return total > 0 ? <span className="pillar-count" style={{ color: PILLARS.soul.color }}>{completed}/{total}</span> : null;
+                    })()}
+                  </div>
+                  <div className="habits-list">
+                    {renderPillarHabits('soul')}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* ============ CALENDAR VIEW ============ */}
-          {view === 'calendar' && (
-            <div className="view-content">
-              <div className="card calendar-card">
-                <div className="calendar-header">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
-                    <div key={i} className="calendar-day-label">{d}</div>
-                  ))}
-                </div>
-                <div className="calendar-grid">
-                  {february2026.map(date => {
-                    const dayStatus = getDayStatus(date);
-                    const isSelected = date === selectedDate;
-                    const dayNum = getDayOfMonth(date);
-                    const hasJournal = hasJournalEntry(date);
-                    const hasIntent = hasIntentions(date);
-                    const isFuture = date > today;
-                    const isMilestoneDate = (() => {
-                      if (!settings?.trackPregnancy || !settings?.lmpDate) return false;
-                      const pi = getPregnancyInfoAtDate(settings.lmpDate, date, settings.cycleLength || 28);
-                      return pi && pi.days === 0 && pregnancyMilestones.some(m => m.week === pi.weeks);
-                    })();
-                    return (
-                      <button key={date}
-                        onClick={() => setSelectedDate(date)}
-                        className={`calendar-day ${dayStatus} ${isSelected ? 'selected' : ''} ${isFuture ? 'future' : ''}`}
-                      >
-                        {dayNum}
-                        {hasJournal && <span className="journal-dot" />}
-                        {isMilestoneDate && <span className="milestone-dot" />}
-                        {hasIntent && isFuture && !isMilestoneDate && <span className="intent-dot" />}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="calendar-legend">
-                  <div className="legend-item"><span className="legend-dot complete" /> All done</div>
-                  <div className="legend-item"><span className="legend-dot partial" /> Partial</div>
-                  <div className="legend-item"><span className="legend-dot journal" /> Notes</div>
-                  <div className="legend-item"><span className="legend-dot milestone" /> Milestone</div>
-                </div>
+                {/* ── JUST A REMINDER ── */}
+                {currentReminder ? (
+                  <div className="reminder-card">
+                    <div className="reminder-label">Just A Reminder</div>
+                    <p className="reminder-text">{currentReminder}</p>
+                    <button onClick={showNextReminder} className="reminder-btn">Show me another &rarr;</button>
+                  </div>
+                ) : settings?.docUrls?.some(url => url.trim()) ? (
+                  <div className="reminder-card">
+                    <div className="reminder-label">Just A Reminder</div>
+                    <p className="reminder-placeholder">Ready to uncover your gold.</p>
+                    <button onClick={loadRemindersFromDocs} className="action-btn" disabled={loadingReminders}>
+                      {loadingReminders ? 'Loading...' : 'Extract My Reminders'}
+                    </button>
+                  </div>
+                ) : null}
               </div>
+            )}
 
-              {/* Date detail panel */}
-              {selectedDate && !isFutureDate && (
-                <div className="calendar-detail card">
-                  <h3 className="detail-date">{formatDate(selectedDate)}</h3>
-                  <div className="detail-pillars">
-                    {Object.entries(PILLARS).map(([key, pillar]) => {
-                      const { completed, total } = getPillarCompletion(key, data?.habits?.[selectedDate] || {}, activeHabitIds);
-                      if (total === 0 && !pillar.sections?.length) return null;
+            {/* ============ CALENDAR VIEW ============ */}
+            {view === 'calendar' && (
+              <div className="view-content">
+                <div className="card calendar-card">
+                  <div className="calendar-nav">
+                    <button onClick={prevMonth} className="cal-nav-btn" disabled={calendarMonth === 1 && calendarYear === 2026}>&larr;</button>
+                    <h3 className="cal-month-title">{getMonthName(calendarYear, calendarMonth)}</h3>
+                    <button onClick={nextMonth} className="cal-nav-btn" disabled={calendarMonth === 5 && calendarYear === 2026}>&rarr;</button>
+                  </div>
+                  <div className="calendar-header">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+                      <div key={i} className="calendar-day-label">{d}</div>
+                    ))}
+                  </div>
+                  <div className="calendar-grid">
+                    {/* Empty cells for first day offset */}
+                    {Array.from({ length: new Date(calendarYear, calendarMonth, 1).getDay() }, (_, i) => (
+                      <div key={`empty-${i}`} className="calendar-day-empty" />
+                    ))}
+                    {getMonthDays(calendarYear, calendarMonth).map(date => {
+                      const dayStatus = getDayStatus(date);
+                      const isSelected = date === selectedDate;
+                      const dayNum = getDayOfMonth(date);
+                      const hasJournal = hasJournalEntry(date);
+                      const isFuture = date > today;
+                      const isMilestoneDate = (() => {
+                        if (!settings?.trackPregnancy || !settings?.lmpDate) return false;
+                        const pi = getPregnancyInfoAtDate(settings.lmpDate, date, settings.cycleLength || 28);
+                        return pi && pi.days === 0 && pregnancyMilestones.some(m => m.week === pi.weeks);
+                      })();
                       return (
-                        <div key={key} className="detail-pillar-row">
-                          <span className="detail-pillar-name" style={{ color: pillar.color }}>{pillar.label}</span>
-                          {total > 0 && <span className="detail-pillar-score">{completed}/{total}</span>}
-                          {key === 'mind' && pregnancyInfo && <span className="detail-pillar-score">Tip viewed</span>}
+                        <button key={date}
+                          onClick={() => setSelectedDate(date)}
+                          className={`calendar-day ${dayStatus} ${isSelected ? 'selected' : ''} ${isFuture ? 'future' : ''}`}
+                        >
+                          {dayNum}
+                          {hasJournal && <span className="journal-dot" />}
+                          {isMilestoneDate && <span className="milestone-dot" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="calendar-legend">
+                    <div className="legend-item"><span className="legend-dot complete" /> All done</div>
+                    <div className="legend-item"><span className="legend-dot partial" /> Partial</div>
+                    <div className="legend-item"><span className="legend-dot journal" /> Notes</div>
+                    <div className="legend-item"><span className="legend-dot milestone" /> Milestone</div>
+                  </div>
+                </div>
+
+                {/* Date detail panel */}
+                {selectedDate && selectedDate <= today && (
+                  <div className="calendar-detail card">
+                    <h3 className="detail-date">{formatDate(selectedDate)}</h3>
+                    <div className="detail-pillars">
+                      {Object.entries(PILLARS).map(([key, pillar]) => {
+                        const { completed, total } = getPillarCompletion(key, data?.habits?.[selectedDate] || {}, activeHabitIds);
+                        if (total === 0 && !pillar.sections?.length) return null;
+                        return (
+                          <div key={key} className="detail-pillar-row">
+                            <span className="detail-pillar-name" style={{ color: pillar.color }}>{pillar.label}</span>
+                            {total > 0 && <span className="detail-pillar-score">{completed}/{total}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {(data?.reflections?.[selectedDate]?.text || data?.journal?.[selectedDate]) && (
+                      <div className="journal-preview">
+                        <p className="journal-preview-text">{data.reflections?.[selectedDate]?.text || data.journal[selectedDate]}</p>
+                      </div>
+                    )}
+                    <button onClick={() => setView('today')} className="action-btn" style={{ marginTop: 12 }}>
+                      View full day &rarr;
+                    </button>
+                  </div>
+                )}
+
+                {/* Future date: Pregnancy focus */}
+                {selectedDate && selectedDate > today && (
+                  <div className="calendar-detail card">
+                    <h3 className="detail-date">{formatDate(selectedDate)}</h3>
+                    {(() => {
+                      if (!settings?.trackPregnancy || !settings?.lmpDate) return null;
+                      const futurePreg = getPregnancyInfoAtDate(settings.lmpDate, selectedDate, settings.cycleLength || 28);
+                      if (!futurePreg || futurePreg.weeks < 1) return null;
+                      return (
+                        <div className="future-pregnancy">
+                          <div className="future-preg-header">
+                            <span className="future-preg-badge">{futurePreg.weeks}w {futurePreg.days}d</span>
+                            <span className="future-preg-trimester">Trimester {futurePreg.trimester}</span>
+                          </div>
+                          <div className="future-preg-info">
+                            <div className="future-preg-row">
+                              <span className="detail-icon">{'\uD83D\uDC76'}</span>
+                              <div><h4>Baby</h4><p>{futurePreg.baby}</p></div>
+                            </div>
+                            <div className="future-preg-row">
+                              <span className="detail-icon">{'\uD83D\uDC9C'}</span>
+                              <div><h4>What She May Be Feeling</h4><p>{futurePreg.mom}</p></div>
+                            </div>
+                          </div>
+                          {futurePreg.upcomingMilestones?.length > 0 && (
+                            <div className="future-milestones">
+                              <h4 className="milestones-title">Key Dates Coming Up</h4>
+                              {futurePreg.upcomingMilestones.map((m, i) => (
+                                <div key={i} className="future-milestone-detail">
+                                  <div className="milestone-item">
+                                    <span className="milestone-emoji">{m.emoji}</span>
+                                    <span className="milestone-week">Week {m.week}</span>
+                                    <span className="milestone-label">{m.label}</span>
+                                  </div>
+                                  {m.description && <p className="milestone-description">{m.description}</p>}
+                                  {m.couple && (
+                                    <div className="milestone-couple">
+                                      <span className="milestone-couple-icon">{'\uD83D\uDC6B'}</span>
+                                      <p className="milestone-couple-text">{m.couple}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============ STATS VIEW ============ */}
+            {view === 'stats' && (
+              <div className="view-content">
+                <div className="stats-overall">
+                  <div className="card stat-card">
+                    <div className="stat-label">Completion</div>
+                    <div className="stat-value">{getCompletionRate()}%</div>
+                  </div>
+                  {PILLARS.body.habits.some(h => activeHabitIds.includes(h.id)) && (
+                    <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.body.color}` }}>
+                      <div className="stat-label">Body Streak</div>
+                      <div className="stat-value">{getPillarStreak('body')}</div>
+                      <div className="stat-unit">days</div>
+                    </div>
+                  )}
+                  {PILLARS.soul.habits.some(h => activeHabitIds.includes(h.id)) && (
+                    <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.soul.color}` }}>
+                      <div className="stat-label">Soul Streak</div>
+                      <div className="stat-value">{getPillarStreak('soul')}</div>
+                      <div className="stat-unit">days</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Body Stats */}
+                <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.body.borderColor }}>
+                  <h3 className="pillar-stat-title" style={{ color: PILLARS.body.color }}>Body</h3>
+                  <div className="pillar-stat-grid">
+                    {activeHabitIds.includes('running') && (
+                      <div className="pstat-item">
+                        <span className="pstat-label">Total Miles</span>
+                        <span className="pstat-value">{getTotalMiles().toFixed(1)}</span>
+                      </div>
+                    )}
+                    {PILLARS.body.habits.filter(h => activeHabitIds.includes(h.id)).map(h => {
+                      const allDays = getAllDaysUpToToday();
+                      const done = allDays.filter(d => data?.habits?.[d]?.[h.id]).length;
+                      return (
+                        <div key={h.id} className="pstat-item">
+                          <span className="pstat-label">{h.emoji} {h.label.split('(')[0].trim()}</span>
+                          <span className="pstat-value">{done}/{allDays.length} days</span>
                         </div>
                       );
                     })}
                   </div>
-                  {(data?.reflections?.[selectedDate]?.text || data?.journal?.[selectedDate]) && (
-                    <div className="journal-preview">
-                      <p className="journal-preview-text">{data.reflections?.[selectedDate]?.text || data.journal[selectedDate]}</p>
-                    </div>
-                  )}
-                  <button onClick={() => { setView('today'); }} className="action-btn" style={{ marginTop: 12 }}>
-                    View full day →
-                  </button>
                 </div>
-              )}
 
-              {/* Future date: Pregnancy focus */}
-              {selectedDate && isFutureDate && (
-                <div className="calendar-detail card">
-                  <h3 className="detail-date">{formatDate(selectedDate)}</h3>
+                {/* Mind Stats */}
+                <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.mind.borderColor }}>
+                  <h3 className="pillar-stat-title" style={{ color: PILLARS.mind.color }}>Mind</h3>
+                  <div className="pillar-stat-grid">
+                    {pregnancyInfo && pregnancyPercent && (
+                      <div className="pstat-item">
+                        <span className="pstat-label">Pregnancy</span>
+                        <span className="pstat-value">{pregnancyInfo.weeks}w {pregnancyInfo.days}d &mdash; {pregnancyPercent.percent}%</span>
+                      </div>
+                    )}
+                    <div className="pstat-item">
+                      <span className="pstat-label">Coach conversations</span>
+                      <span className="pstat-value">{coachConversations.length}</span>
+                    </div>
+                  </div>
+                </div>
 
-                  {/* Pregnancy info for this future date */}
-                  {(() => {
-                    if (!settings?.trackPregnancy || !settings?.lmpDate) return null;
-                    const futurePreg = getPregnancyInfoAtDate(settings.lmpDate, selectedDate, settings.cycleLength || 28);
-                    if (!futurePreg || futurePreg.weeks < 1) return null;
-                    return (
-                      <div className="future-pregnancy">
-                        <div className="future-preg-header">
-                          <span className="future-preg-badge">{futurePreg.weeks}w {futurePreg.days}d</span>
-                          <span className="future-preg-trimester">Trimester {futurePreg.trimester}</span>
+                {/* Soul Stats */}
+                <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.soul.borderColor }}>
+                  <h3 className="pillar-stat-title" style={{ color: PILLARS.soul.color }}>Soul</h3>
+                  <div className="pillar-stat-grid">
+                    {PILLARS.soul.habits.filter(h => activeHabitIds.includes(h.id)).map(h => {
+                      const allDays = getAllDaysUpToToday();
+                      const done = allDays.filter(d => data?.habits?.[d]?.[h.id]).length;
+                      return (
+                        <div key={h.id} className="pstat-item">
+                          <span className="pstat-label">{h.emoji} {h.label.split('(')[0].trim()}</span>
+                          <span className="pstat-value">{done}/{allDays.length} days</span>
                         </div>
-                        <div className="future-preg-info">
-                          <div className="future-preg-row">
-                            <span className="detail-icon">👶</span>
-                            <div><h4>Baby</h4><p>{futurePreg.baby}</p></div>
-                          </div>
-                          <div className="future-preg-row">
-                            <span className="detail-icon">💜</span>
-                            <div><h4>What She May Be Feeling</h4><p>{futurePreg.mom}</p></div>
-                          </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Reminders in stats */}
+                {reminders.length > 0 && (
+                  <div className="reminder-card">
+                    <div className="reminder-label">Just A Reminder ({reminders.length})</div>
+                    <div className="reminders-list">
+                      {reminders.slice(0, 5).map((rem, i) => (
+                        <div key={i} className="reminder-list-item">
+                          <span className="reminder-icon">{'\u2728'}</span>
+                          <p>{rem}</p>
                         </div>
-                        {futurePreg.upcomingMilestones?.length > 0 && (
-                          <div className="future-milestones">
-                            <h4 className="milestones-title">Key Dates Coming Up</h4>
-                            {futurePreg.upcomingMilestones.map((m, i) => (
-                              <div key={i} className="future-milestone-detail">
-                                <div className="milestone-item">
-                                  <span className="milestone-emoji">{m.emoji}</span>
-                                  <span className="milestone-week">Week {m.week}</span>
-                                  <span className="milestone-label">{m.label}</span>
-                                </div>
-                                {m.description && <p className="milestone-description">{m.description}</p>}
-                                {m.couple && (
-                                  <div className="milestone-couple">
-                                    <span className="milestone-couple-icon">👫</span>
-                                    <p className="milestone-couple-text">{m.couple}</p>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+
+          {/* ── RIGHT SIDEBAR: This Month ── */}
+          {view === 'today' && pregnancyInfo && settings?.lmpDate && (
+            <aside className="sidebar-right">
+              <div className="sidebar-card">
+                <div className="sidebar-title">This Month</div>
+                {(() => {
+                  const milestones = currentMonthMilestones;
+                  return milestones.length > 0 ? (
+                    <div className="sidebar-milestones">
+                      {milestones.map((m, i) => {
+                        const key = `${m.week}-${m.label}`;
+                        const checked = checkedMilestones.has(key);
+                        return (
+                          <div key={i} className={`sidebar-milestone-item ${checked ? 'checked' : ''}`} onClick={() => toggleMilestone(key)}>
+                            <span className="sidebar-check">{checked ? '\u2705' : '\u2B1C'}</span>
+                            <div className="sidebar-milestone-info">
+                              <span className="sidebar-milestone-date">
+                                {m.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </span>
+                              <span className="sidebar-milestone-label">{m.emoji} {m.label}</span>
+                            </div>
                           </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="sidebar-empty">No major milestones this month &mdash; keep showing up.</p>
+                  );
+                })()}
+                <div className="sidebar-tip">
+                  <span>{'\uD83D\uDCA1'}</span>
+                  <p>{pregnancyInfo.todaysTip}</p>
+                </div>
+              </div>
+            </aside>
+          )}
+        </div>
+
+        {/* ── FLOATING COACH BUTTON ── */}
+        <button className={`coach-fab ${coachOpen ? 'hidden' : ''}`} onClick={() => setCoachOpen(true)}>
+          <span className="coach-fab-avatar">{'\uD83E\uDDD4'}</span>
+          <span className="coach-fab-label">Coach</span>
+        </button>
+
+        {/* ── COACH DRAWER ── */}
+        {coachOpen && (
+          <>
+            <div className="coach-overlay" onClick={() => setCoachOpen(false)} />
+            <div className="coach-drawer">
+              <div className="coach-drawer-header">
+                <div className="coach-drawer-title-row">
+                  <span className="coach-drawer-avatar">{'\uD83E\uDDD4'}</span>
+                  <h3>Your Coach</h3>
+                </div>
+                <div className="coach-drawer-actions">
+                  <button onClick={() => setShowCoachThreads(!showCoachThreads)} className="coach-threads-btn">
+                    {showCoachThreads ? 'Chat' : 'Threads'}
+                  </button>
+                  <button onClick={createNewConversation} className="coach-new-btn">+</button>
+                  <button onClick={() => setCoachOpen(false)} className="coach-close-btn">&times;</button>
+                </div>
+              </div>
+
+              {showCoachThreads ? (
+                <div className="coach-thread-list">
+                  {coachConversations.map(c => (
+                    <div key={c.id}
+                      className={`coach-thread-item ${c.id === activeConversationId ? 'active' : ''}`}
+                      onClick={() => { setActiveConversationId(c.id); setShowCoachThreads(false); }}
+                    >
+                      <span className="coach-thread-title">{c.title}</span>
+                      <div className="coach-thread-meta">
+                        <span>{new Date(c.updatedAt).toLocaleDateString()}</span>
+                        <button onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }} className="coach-thread-delete">&times;</button>
+                      </div>
+                    </div>
+                  ))}
+                  {coachConversations.length === 0 && (
+                    <p className="coach-empty">No conversations yet. Start one!</p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="coach-messages">
+                    {!activeConversation || activeConversation.messages.length === 0 ? (
+                      <div className="coach-welcome">
+                        <p>Ask anything about pregnancy, supporting your partner, or what to expect. Drop a voice note or type a message.</p>
+                        {pregnancyInfo && (
+                          <p className="coach-context">Week {pregnancyInfo.weeks}, Day {pregnancyInfo.days} &mdash; the coach knows.</p>
                         )}
                       </div>
-                    );
-                  })()}
-
-                  {/* Miles projection */}
-                  {activeHabitIds.includes('running') && (
-                    <div className="projection-grid" style={{ marginTop: 16 }}>
-                      <div className="projection-item">
-                        <span className="proj-label">Est. total miles by then</span>
-                        <span className="proj-value">{getMilesProjection(selectedDate).toFixed(1)} mi</span>
+                    ) : (
+                      activeConversation.messages.map((msg, i) => (
+                        <div key={i} className={`coach-msg ${msg.role}`}>
+                          {msg.images && msg.images.length > 0 && (
+                            <div className="coach-msg-images">
+                              {msg.images.map((img, j) => (
+                                <img key={j} src={img} alt="Uploaded" className="coach-msg-image" />
+                              ))}
+                            </div>
+                          )}
+                          <div className="coach-msg-content">{msg.content}</div>
+                          <div className="coach-msg-time">
+                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {coachSending && (
+                      <div className="coach-msg assistant">
+                        <div className="typing-indicator"><span /><span /><span /></div>
                       </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  {/* Coach image preview */}
+                  {coachImageAttachments.length > 0 && (
+                    <div className="coach-img-preview">
+                      {coachImageAttachments.map((img, i) => (
+                        <div key={i} className="coach-img-thumb">
+                          <img src={img} alt="Preview" />
+                          <button onClick={() => setCoachImageAttachments(prev => prev.filter((_, idx) => idx !== i))} className="coach-img-remove">&times;</button>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
+
+                  <div className="coach-input-area">
+                    <button onClick={() => fileInputRef.current?.click()} className="coach-attach-btn">{'\uD83D\uDCCE'}</button>
+                    <input type="file" ref={fileInputRef} accept="image/*" multiple onChange={handleCoachImageUpload} style={{ display: 'none' }} />
+
+                    {typeof navigator !== 'undefined' && navigator.mediaDevices && (
+                      <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        className={`coach-voice-btn ${isRecording ? 'recording' : ''}`}
+                        disabled={transcribing}
+                      >
+                        {transcribing ? '\u23F3' : isRecording ? `\u23F9 ${recordingDuration}s` : '\uD83C\uDF99\uFE0F'}
+                      </button>
+                    )}
+
+                    <textarea
+                      placeholder="Ask the coach anything..."
+                      value={coachInput}
+                      onChange={(e) => setCoachInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendCoachMessage(); } }}
+                      className="coach-text-input"
+                      rows={1}
+                    />
+                    <button onClick={sendCoachMessage} disabled={coachSending || (!coachInput.trim() && coachImageAttachments.length === 0)} className="coach-send-btn">
+                      {coachSending ? '...' : '\u2192'}
+                    </button>
+                  </div>
+                </>
               )}
             </div>
-          )}
-
-          {/* ============ STATS VIEW ============ */}
-          {view === 'stats' && (
-            <div className="view-content">
-              {/* Overall */}
-              <div className="stats-overall">
-                <div className="card stat-card">
-                  <div className="stat-label">Completion</div>
-                  <div className="stat-value">{getCompletionRate()}%</div>
-                </div>
-                {PILLARS.body.habits.some(h => activeHabitIds.includes(h.id)) && (
-                  <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.body.color}` }}>
-                    <div className="stat-label">Body Streak</div>
-                    <div className="stat-value">{getPillarStreak('body')}</div>
-                    <div className="stat-unit">days</div>
-                  </div>
-                )}
-                {PILLARS.soul.habits.some(h => activeHabitIds.includes(h.id)) && (
-                  <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.soul.color}` }}>
-                    <div className="stat-label">Soul Streak</div>
-                    <div className="stat-value">{getPillarStreak('soul')}</div>
-                    <div className="stat-unit">days</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Body Stats */}
-              <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.body.borderColor }}>
-                <h3 className="pillar-stat-title" style={{ color: PILLARS.body.color }}>Body</h3>
-                <div className="pillar-stat-grid">
-                  {activeHabitIds.includes('running') && (
-                    <div className="pstat-item">
-                      <span className="pstat-label">Total Miles</span>
-                      <span className="pstat-value">{getTotalMiles().toFixed(1)}</span>
-                    </div>
-                  )}
-                  {PILLARS.body.habits.filter(h => activeHabitIds.includes(h.id)).map(h => {
-                    const daysToCount = february2026.filter(d => d <= today);
-                    const done = daysToCount.filter(d => data?.habits?.[d]?.[h.id]).length;
-                    return (
-                      <div key={h.id} className="pstat-item">
-                        <span className="pstat-label">{h.emoji} {h.label.split('(')[0].trim()}</span>
-                        <span className="pstat-value">{done}/{daysToCount.length} days</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {activeHabitIds.includes('running') && (
-                  <div className="weekly-running">
-                    {[1, 2, 3, 4].map(week => (
-                      <div key={week} className="weekly-row">
-                        <div className="weekly-info">
-                          <span className="weekly-label">Week {week}</span>
-                          <span className="weekly-miles">{getWeeklyMiles(week).toFixed(1)} / {weeklyMileGoal} mi</span>
-                        </div>
-                        <div className="progress-bar-bg small">
-                          <div className={`progress-bar-fill ${getWeeklyMiles(week) >= weeklyMileGoal ? 'complete' : ''}`}
-                            style={{ width: `${Math.min((getWeeklyMiles(week) / weeklyMileGoal) * 100, 100)}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Mind Stats */}
-              <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.mind.borderColor }}>
-                <h3 className="pillar-stat-title" style={{ color: PILLARS.mind.color }}>Mind</h3>
-                <div className="pillar-stat-grid">
-                  {pregnancyInfo && pregnancyPercent && (
-                    <div className="pstat-item">
-                      <span className="pstat-label">Pregnancy</span>
-                      <span className="pstat-value">{pregnancyInfo.weeks}w {pregnancyInfo.days}d — {pregnancyPercent.percent}%</span>
-                    </div>
-                  )}
-                  <div className="pstat-item">
-                    <span className="pstat-label">Coach conversations</span>
-                    <span className="pstat-value">
-                      {(() => {
-                        try {
-                          const convos = JSON.parse(localStorage.getItem('dadReadyCoachConversations') || '[]');
-                          return convos.length;
-                        } catch { return 0; }
-                      })()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Soul Stats */}
-              <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.soul.borderColor }}>
-                <h3 className="pillar-stat-title" style={{ color: PILLARS.soul.color }}>Soul</h3>
-                <div className="pillar-stat-grid">
-                  {PILLARS.soul.habits.filter(h => activeHabitIds.includes(h.id)).map(h => {
-                    const daysToCount = february2026.filter(d => d <= today);
-                    const done = daysToCount.filter(d => data?.habits?.[d]?.[h.id]).length;
-                    return (
-                      <div key={h.id} className="pstat-item">
-                        <span className="pstat-label">{h.emoji} {h.label.split('(')[0].trim()}</span>
-                        <span className="pstat-value">{done}/{daysToCount.length} days</span>
-                      </div>
-                    );
-                  })}
-                  {(() => {
-                    const { entries, noteCount } = getReflectionStats();
-                    return (
-                      <div className="pstat-item">
-                        <span className="pstat-label">📝 Reflections</span>
-                        <span className="pstat-value">{entries} entries{noteCount > 0 ? `, ${noteCount} voice notes` : ''}</span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Reminders in stats */}
-              {reminders.length > 0 && (
-                <div className="reminder-card">
-                  <div className="reminder-label">Just A Reminder ({reminders.length})</div>
-                  <div className="reminders-list">
-                    {reminders.slice(0, 5).map((rem, i) => (
-                      <div key={i} className="reminder-list-item">
-                        <span className="reminder-icon">✨</span>
-                        <p>{rem}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </main>
+          </>
+        )}
       </div>
 
       <style jsx global>{`
@@ -1174,16 +1306,23 @@ export default function Home() {
         .background.evening::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 60%; background: linear-gradient(180deg, rgba(196, 96, 80, 0.2) 0%, transparent 100%); }
 
         /* Header */
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; max-width: 680px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; max-width: 960px; margin: 0 auto; }
         .header-left { display: flex; align-items: center; gap: 12px; }
         .header-avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); }
         .header-info { display: flex; flex-direction: column; }
         .header-welcome { font-family: 'Crimson Pro', serif; font-size: 1.1rem; font-weight: 400; color: rgba(255,255,255,0.85); }
-        .header-pregnancy { font-size: 0.75rem; color: #e879f9; margin-top: 2px; }
+        .header-tagline { font-size: 0.78rem; color: #e879f9; margin-top: 2px; font-weight: 500; letter-spacing: 0.5px; }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+        .audio-toggle { background: rgba(255,255,255,0.08); border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 1rem; transition: background 0.2s; }
+        .audio-toggle.playing { background: rgba(245, 158, 11, 0.15); }
+        .audio-toggle:hover { background: rgba(255,255,255,0.15); }
         .settings-btn { background: rgba(255,255,255,0.08); border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 1rem; transition: background 0.2s; }
         .settings-btn:hover { background: rgba(255,255,255,0.15); }
 
-        .main-content { max-width: 680px; margin: 0 auto; padding: 0 24px 48px; }
+        /* Layout */
+        .layout-wrapper { display: flex; max-width: 960px; margin: 0 auto; gap: 24px; padding: 0 24px 48px; }
+        .main-content { flex: 1; min-width: 0; max-width: 640px; }
+        .sidebar-right { width: 260px; flex-shrink: 0; position: sticky; top: 20px; align-self: flex-start; }
 
         /* Quote */
         .quote-inline { text-align: center; padding: 0 8px 20px; }
@@ -1220,7 +1359,7 @@ export default function Home() {
         .habit-label { flex: 1; font-weight: 400; font-size: 0.9rem; color: rgba(255,255,255,0.85); }
         .habit-check { font-size: 1.1rem; font-weight: 600; }
 
-        .habit-input-row { display: flex; gap: 10px; margin-top: 10px; }
+        .habit-input-row { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
         .input-field { flex: 1; padding: 12px 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #fff; font-size: 0.9rem; }
         .input-field:focus { outline: none; border-color: rgba(102, 126, 234, 0.5); }
         .input-field::placeholder { color: rgba(255,255,255,0.25); }
@@ -1262,46 +1401,17 @@ export default function Home() {
         .pregnancy-detail-row h4 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
         .pregnancy-detail-row p { font-size: 0.88rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
 
-        /* Coach button */
-        .coach-btn {
-          width: 100%; display: flex; justify-content: space-between; align-items: center;
-          padding: 14px 18px; background: rgba(167, 139, 250, 0.1);
-          border: 1px solid rgba(167, 139, 250, 0.25); border-radius: 12px;
-          color: rgba(255,255,255,0.8); font-size: 0.9rem; cursor: pointer; transition: all 0.2s;
+        /* Weekly Action */
+        .weekly-action-card {
+          margin-top: 14px; padding: 16px; background: rgba(167, 139, 250, 0.08);
+          border: 1px solid rgba(167, 139, 250, 0.2); border-radius: 12px;
         }
-        .coach-btn:hover { background: rgba(167, 139, 250, 0.18); }
-        .coach-arrow { color: rgba(255,255,255,0.4); }
-
-        /* Reflections */
-        .reflections-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); }
-        .reflections-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(255,255,255,0.4); margin-bottom: 10px; }
-        .reflection-textarea {
-          width: 100%; min-height: 120px; background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;
-          color: #fff; font-family: inherit; font-size: 0.9rem; line-height: 1.6; resize: none;
-        }
-        .reflection-textarea:focus { outline: none; border-color: rgba(245, 158, 11, 0.4); }
-        .reflection-textarea::placeholder { color: rgba(255,255,255,0.2); }
-
-        .reflection-actions { display: flex; gap: 8px; margin-top: 10px; }
-        .audio-btn, .record-btn {
-          padding: 10px 16px; border-radius: 10px; font-size: 0.82rem; cursor: pointer; transition: all 0.2s;
-          border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.7);
-        }
-        .audio-btn:hover, .record-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
-        .audio-btn.playing { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); color: #f59e0b; }
-        .record-btn.recording { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #ef4444; animation: pulse 1s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-        .record-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .voice-notes-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-        .voice-note-item { padding: 12px; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 10px; }
-        .voice-note-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-        .voice-note-time { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
-        .voice-note-duration { font-size: 0.72rem; color: rgba(255,255,255,0.3); }
-        .voice-note-delete { background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 1rem; margin-left: auto; }
-        .voice-note-delete:hover { color: #ef4444; }
-        .voice-note-transcript { font-size: 0.85rem; color: rgba(255,255,255,0.65); line-height: 1.5; font-style: italic; }
+        .weekly-action-header { margin-bottom: 10px; }
+        .weekly-action-label { font-size: 0.78rem; font-weight: 600; color: rgba(167, 139, 250, 0.8); text-transform: uppercase; letter-spacing: 1px; }
+        .weekly-action-item { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 8px 0; user-select: none; }
+        .weekly-action-check { font-size: 1.2rem; flex-shrink: 0; }
+        .weekly-action-text { font-size: 0.92rem; color: rgba(255,255,255,0.85); line-height: 1.4; }
+        .weekly-action-text.done { text-decoration: line-through; color: rgba(255,255,255,0.4); }
 
         /* Reminder card */
         .reminder-card {
@@ -1328,9 +1438,15 @@ export default function Home() {
 
         /* Calendar */
         .calendar-card { margin-bottom: 16px; }
+        .calendar-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .cal-nav-btn { background: rgba(255,255,255,0.08); border: none; padding: 8px 14px; border-radius: 8px; color: rgba(255,255,255,0.7); font-size: 1rem; cursor: pointer; transition: background 0.2s; }
+        .cal-nav-btn:hover { background: rgba(255,255,255,0.15); }
+        .cal-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .cal-month-title { font-family: 'Crimson Pro', serif; font-size: 1.2rem; font-weight: 400; color: rgba(255,255,255,0.85); }
         .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 12px; }
         .calendar-day-label { text-align: center; font-size: 0.72rem; color: rgba(255,255,255,0.35); text-transform: uppercase; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+        .calendar-day-empty { aspect-ratio: 1; }
         .calendar-day { aspect-ratio: 1; border: none; border-radius: 10px; background: rgba(255,255,255,0.05); color: #fff; font-size: 0.85rem; font-weight: 500; cursor: pointer; position: relative; transition: all 0.2s; }
         .calendar-day:hover { background: rgba(255,255,255,0.12); }
         .calendar-day.selected { border: 2px solid #667eea; }
@@ -1338,7 +1454,6 @@ export default function Home() {
         .calendar-day.partial { background: rgba(102, 126, 234, 0.25); }
         .calendar-day.future { color: rgba(255,255,255,0.4); }
         .journal-dot { position: absolute; bottom: 4px; right: 4px; width: 5px; height: 5px; background: #f59e0b; border-radius: 50%; }
-        .intent-dot { position: absolute; bottom: 4px; left: 4px; width: 5px; height: 5px; background: #a78bfa; border-radius: 50%; }
         .milestone-dot { position: absolute; top: 4px; left: 4px; width: 5px; height: 5px; background: #e879f9; border-radius: 50%; }
         .calendar-legend { display: flex; gap: 16px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
         .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: rgba(255,255,255,0.4); }
@@ -1355,20 +1470,8 @@ export default function Home() {
         .detail-pillar-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.04); border-radius: 8px; }
         .detail-pillar-name { font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
         .detail-pillar-score { font-size: 0.85rem; color: rgba(255,255,255,0.6); }
-        .detail-section-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(255,255,255,0.4); margin-bottom: 10px; }
-
         .journal-preview { margin-top: 14px; padding: 14px; background: rgba(245, 158, 11, 0.06); border-left: 3px solid rgba(245, 158, 11, 0.4); border-radius: 8px; }
         .journal-preview-text { color: rgba(255,255,255,0.65); font-size: 0.85rem; line-height: 1.5; white-space: pre-wrap; }
-
-        /* Intentions (future dates) */
-        .intention-goals { margin-bottom: 12px; }
-        .intention-goal-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(167, 139, 250, 0.08); border-radius: 8px; margin-bottom: 6px; font-size: 0.88rem; color: rgba(255,255,255,0.8); }
-        .intention-remove { background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 1.1rem; }
-        .intention-remove:hover { color: #ef4444; }
-        .intention-add-row { display: flex; gap: 8px; }
-        .intention-notes { width: 100%; min-height: 60px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; color: #fff; font-family: inherit; font-size: 0.88rem; line-height: 1.5; resize: none; margin-top: 8px; }
-        .intention-notes:focus { outline: none; border-color: rgba(167, 139, 250, 0.4); }
-        .intention-notes::placeholder { color: rgba(255,255,255,0.2); }
 
         .projection-grid { display: flex; flex-direction: column; gap: 8px; }
         .projection-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.04); border-radius: 8px; }
@@ -1392,41 +1495,44 @@ export default function Home() {
         .milestone-label { color: rgba(255,255,255,0.7); }
         .future-milestone-detail { padding: 14px; background: rgba(232, 121, 249, 0.06); border-radius: 10px; margin-bottom: 10px; }
         .future-milestone-detail .milestone-item { padding: 0 0 8px 0; }
+        .milestone-description { font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 10px; }
+        .milestone-couple { display: flex; gap: 10px; padding: 12px; background: rgba(232, 121, 249, 0.08); border-radius: 10px; }
+        .milestone-couple-icon { font-size: 1rem; flex-shrink: 0; }
+        .milestone-couple-text { font-size: 0.82rem; color: rgba(255,255,255,0.7); line-height: 1.5; margin: 0; font-style: italic; }
 
         /* Save confirmation flash */
         .saved-flash { color: #22c55e; font-size: 0.78rem; font-weight: 500; animation: flashIn 0.3s ease; }
         @keyframes flashIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
         .gratitude-save-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 
-        /* This Month section */
-        .this-month-card {
+        /* Sidebar */
+        .sidebar-card {
           background: rgba(255,255,255,0.06); backdrop-filter: blur(20px);
           border: 1px solid rgba(255,255,255,0.08); border-left: 3px solid rgba(232, 121, 249, 0.4);
-          border-radius: 16px; padding: 20px 22px; margin-top: 16px;
+          border-radius: 16px; padding: 18px;
         }
-        .this-month-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(232, 121, 249, 0.7); margin-bottom: 14px; font-weight: 600; }
-        .month-milestones { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
-        .month-milestone-item { padding: 16px; background: rgba(232, 121, 249, 0.06); border-radius: 12px; border-left: 3px solid rgba(232, 121, 249, 0.3); }
-        .milestone-header-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-        .month-milestone-emoji { font-size: 1.3rem; flex-shrink: 0; }
-        .milestone-header-info { display: flex; flex-direction: column; gap: 2px; }
-        .month-milestone-week { font-size: 0.92rem; color: rgba(255,255,255,0.9); font-weight: 500; }
-        .month-milestone-date { font-size: 0.78rem; color: #e879f9; font-weight: 500; }
-        .milestone-description { font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 10px; }
-        .milestone-couple { display: flex; gap: 10px; padding: 12px; background: rgba(232, 121, 249, 0.08); border-radius: 10px; }
-        .milestone-couple-icon { font-size: 1rem; flex-shrink: 0; }
-        .milestone-couple-text { font-size: 0.82rem; color: rgba(255,255,255,0.7); line-height: 1.5; margin: 0; font-style: italic; }
-        .month-no-milestones { font-size: 0.85rem; color: rgba(255,255,255,0.4); margin-bottom: 14px; font-style: italic; }
-        .month-tip { display: flex; gap: 10px; padding-top: 14px; border-top: 1px solid rgba(232, 121, 249, 0.15); }
-        .support-tip-icon { flex-shrink: 0; font-size: 1rem; }
-        .support-tip-text { font-size: 0.82rem; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0; }
+        .sidebar-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(232, 121, 249, 0.7); margin-bottom: 14px; font-weight: 600; }
+        .sidebar-milestones { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+        .sidebar-milestone-item {
+          display: flex; align-items: flex-start; gap: 10px; padding: 10px;
+          background: rgba(255,255,255,0.04); border-radius: 10px; cursor: pointer;
+          transition: all 0.2s; user-select: none;
+        }
+        .sidebar-milestone-item:hover { background: rgba(255,255,255,0.08); }
+        .sidebar-milestone-item.checked { opacity: 0.6; }
+        .sidebar-check { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+        .sidebar-milestone-info { display: flex; flex-direction: column; gap: 2px; }
+        .sidebar-milestone-date { font-size: 0.72rem; color: #e879f9; font-weight: 500; }
+        .sidebar-milestone-label { font-size: 0.82rem; color: rgba(255,255,255,0.8); }
+        .sidebar-empty { font-size: 0.82rem; color: rgba(255,255,255,0.4); font-style: italic; margin-bottom: 14px; }
+        .sidebar-tip { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid rgba(232, 121, 249, 0.15); }
+        .sidebar-tip p { font-size: 0.78rem; color: rgba(255,255,255,0.5); line-height: 1.4; margin: 0; }
 
         /* Stats */
         .stats-overall { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; }
         .stat-card { text-align: center; padding: 24px 16px; }
         .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
         .stat-value { font-family: 'Crimson Pro', serif; font-size: 2.2rem; font-weight: 300; }
-        .stat-value.large { font-size: 3rem; }
         .stat-unit { color: rgba(255,255,255,0.4); font-size: 0.8rem; margin-top: 4px; }
 
         .pillar-stat-card {
@@ -1440,16 +1546,139 @@ export default function Home() {
         .pstat-label { font-size: 0.82rem; color: rgba(255,255,255,0.6); }
         .pstat-value { font-size: 0.88rem; font-weight: 500; color: rgba(255,255,255,0.85); }
 
-        .weekly-running { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
-        .weekly-row { margin-bottom: 12px; }
-        .weekly-info { display: flex; justify-content: space-between; margin-bottom: 6px; }
-        .weekly-label { color: rgba(255,255,255,0.5); font-size: 0.8rem; }
-        .weekly-miles { font-weight: 500; font-size: 0.85rem; }
+        /* Floating Coach Button */
+        .coach-fab {
+          position: fixed; bottom: 24px; left: 24px; z-index: 50;
+          display: flex; align-items: center; gap: 8px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none; border-radius: 28px; padding: 12px 20px;
+          color: #fff; cursor: pointer; box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+          transition: all 0.3s; font-size: 0.88rem; font-weight: 500;
+        }
+        .coach-fab:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(102, 126, 234, 0.5); }
+        .coach-fab.hidden { display: none; }
+        .coach-fab-avatar { font-size: 1.3rem; }
+        .coach-fab-label { font-size: 0.82rem; }
 
-        @media (max-width: 600px) {
+        /* Coach Overlay */
+        .coach-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 98; }
+
+        /* Coach Drawer */
+        .coach-drawer {
+          position: fixed; left: 0; top: 0; bottom: 0; width: 380px;
+          background: rgba(15, 15, 30, 0.98); backdrop-filter: blur(20px);
+          border-right: 1px solid rgba(255,255,255,0.1);
+          z-index: 100; display: flex; flex-direction: column;
+          animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+        .coach-drawer-header {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .coach-drawer-title-row { display: flex; align-items: center; gap: 10px; }
+        .coach-drawer-avatar { font-size: 1.5rem; }
+        .coach-drawer-title-row h3 { font-family: 'Crimson Pro', serif; font-size: 1.15rem; font-weight: 400; color: #a78bfa; }
+        .coach-drawer-actions { display: flex; gap: 6px; }
+        .coach-threads-btn, .coach-new-btn, .coach-close-btn {
+          background: rgba(255,255,255,0.08); border: none; padding: 6px 12px;
+          border-radius: 8px; color: rgba(255,255,255,0.6); font-size: 0.78rem; cursor: pointer;
+        }
+        .coach-close-btn { font-size: 1.2rem; padding: 4px 10px; }
+        .coach-threads-btn:hover, .coach-new-btn:hover, .coach-close-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+        /* Coach Threads */
+        .coach-thread-list { flex: 1; overflow-y: auto; padding: 12px; }
+        .coach-thread-item {
+          padding: 12px; border-radius: 10px; cursor: pointer; margin-bottom: 4px;
+          transition: background 0.2s;
+        }
+        .coach-thread-item:hover { background: rgba(255,255,255,0.08); }
+        .coach-thread-item.active { background: rgba(102, 126, 234, 0.2); }
+        .coach-thread-title { font-size: 0.85rem; color: rgba(255,255,255,0.85); display: block; margin-bottom: 4px; }
+        .coach-thread-meta { display: flex; justify-content: space-between; align-items: center; }
+        .coach-thread-meta span { font-size: 0.72rem; color: rgba(255,255,255,0.3); }
+        .coach-thread-delete { background: none; border: none; color: rgba(255,255,255,0.2); cursor: pointer; font-size: 1rem; }
+        .coach-thread-delete:hover { color: #ef4444; }
+        .coach-empty { text-align: center; color: rgba(255,255,255,0.3); font-size: 0.85rem; padding: 20px; }
+
+        /* Coach Messages */
+        .coach-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .coach-welcome { text-align: center; margin: auto; max-width: 300px; padding: 30px 16px; }
+        .coach-welcome p { color: rgba(255,255,255,0.5); font-size: 0.85rem; line-height: 1.5; }
+        .coach-context { margin-top: 8px; color: #a78bfa; font-size: 0.78rem; }
+
+        .coach-msg { max-width: 85%; padding: 12px 16px; border-radius: 14px; }
+        .coach-msg.user {
+          align-self: flex-end; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-bottom-right-radius: 4px;
+        }
+        .coach-msg.assistant {
+          align-self: flex-start; background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.1); border-bottom-left-radius: 4px;
+        }
+        .coach-msg-content { font-size: 0.85rem; line-height: 1.6; white-space: pre-wrap; }
+        .coach-msg-time { font-size: 0.65rem; color: rgba(255,255,255,0.35); margin-top: 4px; }
+        .coach-msg-images { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+        .coach-msg-image { max-width: 150px; max-height: 150px; border-radius: 8px; object-fit: cover; }
+
+        .typing-indicator { display: flex; gap: 6px; padding: 4px 0; }
+        .typing-indicator span {
+          width: 8px; height: 8px; background: rgba(255,255,255,0.4); border-radius: 50%;
+          animation: typingBounce 1.4s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+        /* Coach Image Preview */
+        .coach-img-preview { display: flex; gap: 6px; padding: 6px 16px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .coach-img-thumb { position: relative; }
+        .coach-img-thumb img { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; }
+        .coach-img-remove {
+          position: absolute; top: -4px; right: -4px; width: 18px; height: 18px;
+          background: #ef4444; border: none; border-radius: 50%; color: #fff;
+          font-size: 0.65rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+
+        /* Coach Input */
+        .coach-input-area {
+          display: flex; align-items: flex-end; gap: 6px;
+          padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .coach-attach-btn, .coach-voice-btn {
+          background: rgba(255,255,255,0.08); border: none; padding: 10px;
+          border-radius: 10px; font-size: 1rem; cursor: pointer; flex-shrink: 0;
+          color: rgba(255,255,255,0.6);
+        }
+        .coach-attach-btn:hover, .coach-voice-btn:hover { background: rgba(255,255,255,0.12); }
+        .coach-voice-btn.recording { background: rgba(239, 68, 68, 0.15); color: #ef4444; animation: pulse 1s infinite; }
+        .coach-voice-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .coach-text-input {
+          flex: 1; padding: 10px 14px; background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+          color: #fff; font-family: inherit; font-size: 0.85rem; resize: none;
+          max-height: 100px; min-height: 40px;
+        }
+        .coach-text-input:focus { outline: none; border-color: rgba(167, 139, 250, 0.5); }
+        .coach-text-input::placeholder { color: rgba(255,255,255,0.25); }
+        .coach-send-btn {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none; padding: 10px 16px; border-radius: 10px;
+          color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer; flex-shrink: 0;
+        }
+        .coach-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        @media (max-width: 768px) {
+          .layout-wrapper { flex-direction: column; padding: 0 16px 32px; }
+          .sidebar-right { width: 100%; position: static; order: 10; margin-top: 16px; }
           .header { padding: 16px 16px; }
-          .main-content { padding: 0 16px 32px; }
+          .main-content { max-width: 100%; }
           .stats-overall { grid-template-columns: 1fr; }
+          .coach-drawer { width: 100%; }
+          .coach-fab { bottom: 16px; left: 16px; }
         }
       `}</style>
     </>
