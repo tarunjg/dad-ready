@@ -10,7 +10,12 @@ export default function Login() {
 
   useEffect(() => {
     if (session) {
-      router.push("/");
+      const settings = localStorage.getItem('dadReadySettings');
+      if (settings) {
+        router.push("/");
+      } else {
+        router.push("/onboarding");
+      }
     }
   }, [session, router]);
 
@@ -22,10 +27,7 @@ export default function Login() {
           .loading {
             min-height: 100vh;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
+            display: flex; align-items: center; justify-content: center; color: white;
           }
         `}</style>
       </div>
@@ -37,7 +39,6 @@ export default function Login() {
       <Head>
         <title>Dad Ready | Sign In</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="theme-color" content="#1a1a2e" />
         <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
       </Head>
       
@@ -47,12 +48,12 @@ export default function Login() {
         <div className="content">
           <div className="brand">
             <h1>Dad Ready</h1>
-            <p className="tagline">February 2026</p>
+            <p className="tagline">Prepare for the most important role of your life</p>
           </div>
 
           {error && (
             <div className="error-message">
-              Access denied. Your email is not authorized.
+              Access denied. Please try again.
             </div>
           )}
 
@@ -71,129 +72,58 @@ export default function Login() {
               </svg>
               Sign in with Google
             </button>
+            
+            <p className="note">We'll ask for permission to read your Google Docs to extract your wins.</p>
           </div>
 
-          <p className="footer-text">🏀 Prepare for the most important role of your life</p>
+          <p className="footer-text">🏀 Get dad-ready.</p>
         </div>
       </div>
 
       <style jsx>{`
         .login-page {
-          min-height: 100vh;
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          min-height: 100vh; position: relative;
+          display: flex; align-items: center; justify-content: center;
+          font-family: 'Inter', -apple-system, sans-serif;
         }
-
         .background {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          position: fixed; inset: 0;
           background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-          z-index: -2;
+          z-index: -1;
         }
-
         .background::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 70%;
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 70%;
           background: linear-gradient(180deg, rgba(102, 126, 234, 0.2) 0%, transparent 100%);
         }
-
-        .content {
-          text-align: center;
-          padding: 40px 20px;
-          max-width: 440px;
-          width: 100%;
-        }
-
+        .content { text-align: center; padding: 40px 20px; max-width: 440px; width: 100%; }
         .brand h1 {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 3.5rem;
-          font-weight: 400;
-          color: #fff;
-          margin: 0 0 8px 0;
-          letter-spacing: -1px;
+          font-family: 'Crimson Pro', serif; font-size: 3.5rem; font-weight: 400;
+          color: #fff; margin: 0 0 8px 0;
         }
-
-        .tagline {
-          color: rgba(255,255,255,0.5);
-          font-size: 1rem;
-          font-weight: 300;
-          margin: 0 0 48px 0;
-        }
-
+        .tagline { color: rgba(255,255,255,0.5); font-size: 1rem; margin: 0 0 48px 0; }
         .error-message {
-          background: rgba(220, 38, 38, 0.2);
-          border: 1px solid rgba(220, 38, 38, 0.4);
-          border-radius: 12px;
-          padding: 14px 20px;
-          margin-bottom: 24px;
-          color: #fecaca;
-          font-size: 0.9rem;
+          background: rgba(220, 38, 38, 0.2); border: 1px solid rgba(220, 38, 38, 0.4);
+          border-radius: 12px; padding: 14px 20px; margin-bottom: 24px; color: #fecaca;
         }
-
         .login-card {
-          background: rgba(255,255,255,0.08);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 24px;
-          padding: 40px 32px;
+          background: rgba(255,255,255,0.08); backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 40px 32px;
         }
-
-        .quote {
-          margin-bottom: 32px;
-        }
-
+        .quote { margin-bottom: 32px; }
         .quote p {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 1.25rem;
-          font-weight: 300;
-          line-height: 1.6;
-          color: rgba(255,255,255,0.9);
-          margin: 0 0 12px 0;
-          font-style: italic;
+          font-family: 'Crimson Pro', serif; font-size: 1.25rem; font-weight: 300;
+          line-height: 1.6; color: rgba(255,255,255,0.9); margin: 0 0 12px 0; font-style: italic;
         }
-
-        .quote span {
-          color: rgba(255,255,255,0.4);
-          font-size: 0.9rem;
-        }
-
+        .quote span { color: rgba(255,255,255,0.4); font-size: 0.9rem; }
         .google-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 14px;
-          width: 100%;
-          padding: 16px 24px;
-          background: #fff;
-          color: #333;
-          border: none;
-          border-radius: 14px;
-          font-size: 1rem;
-          font-weight: 500;
-          cursor: pointer;
+          display: flex; align-items: center; justify-content: center; gap: 14px;
+          width: 100%; padding: 16px 24px; background: #fff; color: #333;
+          border: none; border-radius: 14px; font-size: 1rem; font-weight: 500; cursor: pointer;
           transition: all 0.2s;
         }
-
-        .google-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-        }
-
-        .footer-text {
-          color: rgba(255,255,255,0.4);
-          font-size: 0.9rem;
-          margin-top: 48px;
-        }
+        .google-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+        .note { color: rgba(255,255,255,0.4); font-size: 0.8rem; margin-top: 16px; }
+        .footer-text { color: rgba(255,255,255,0.4); font-size: 0.9rem; margin-top: 48px; }
       `}</style>
     </>
   );
