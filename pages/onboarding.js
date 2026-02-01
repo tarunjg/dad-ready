@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import Head from "next/head";
@@ -41,6 +41,8 @@ const HABITS_INFO = [
   }
 ];
 
+const STEP_LABELS = ['Welcome', 'Habits', 'Partner', 'Journals', 'Your Why'];
+
 export default function Onboarding() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -51,9 +53,36 @@ export default function Onboarding() {
   const [lmpDate, setLmpDate] = useState('');
   const [cycleLength, setCycleLength] = useState(28);
   const [trackPregnancy, setTrackPregnancy] = useState(true);
+  const [dadMeaning, setDadMeaning] = useState('');
+  const [dadFears, setDadFears] = useState('');
+  const [direction, setDirection] = useState('forward');
+
+  // Load existing settings if returning
+  useEffect(() => {
+    const saved = localStorage.getItem('dadReadySettings');
+    if (saved) {
+      const s = JSON.parse(saved);
+      if (s.habits) setSelectedHabits(s.habits);
+      if (s.docUrls) {
+        const urls = [...s.docUrls];
+        while (urls.length < 5) urls.push('');
+        setDocUrls(urls);
+      }
+      if (s.weeklyMileGoal) setWeeklyMileGoal(s.weeklyMileGoal);
+      if (s.lmpDate) setLmpDate(s.lmpDate);
+      if (s.cycleLength) setCycleLength(s.cycleLength);
+      if (s.trackPregnancy !== undefined) setTrackPregnancy(s.trackPregnancy);
+      if (s.dadMeaning) setDadMeaning(s.dadMeaning);
+      if (s.dadFears) setDadFears(s.dadFears);
+    }
+  }, []);
 
   if (status === "loading") {
-    return <div className="loading">Loading...</div>;
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a2e', color: '#fff', fontFamily: "'Inter', sans-serif" }}>
+        Loading...
+      </div>
+    );
   }
 
   if (!session) {
@@ -61,9 +90,14 @@ export default function Onboarding() {
     return null;
   }
 
+  const goTo = (nextStep) => {
+    setDirection(nextStep > step ? 'forward' : 'backward');
+    setStep(nextStep);
+  };
+
   const toggleHabit = (habitId) => {
-    setSelectedHabits(prev => 
-      prev.includes(habitId) 
+    setSelectedHabits(prev =>
+      prev.includes(habitId)
         ? prev.filter(h => h !== habitId)
         : [...prev, habitId]
     );
@@ -76,15 +110,20 @@ export default function Onboarding() {
   };
 
   const completeOnboarding = () => {
+    const existing = localStorage.getItem('dadReadySettings');
+    const prev = existing ? JSON.parse(existing) : {};
     const settings = {
+      ...prev,
       habits: selectedHabits,
       weeklyMileGoal: weeklyMileGoal,
       docUrls: docUrls.filter(url => url.trim() !== ''),
       trackPregnancy: trackPregnancy,
       lmpDate: lmpDate,
       cycleLength: cycleLength,
+      dadMeaning: dadMeaning,
+      dadFears: dadFears,
       onboardingComplete: true,
-      createdAt: new Date().toISOString()
+      createdAt: prev.createdAt || new Date().toISOString()
     };
     localStorage.setItem('dadReadySettings', JSON.stringify(settings));
     router.push('/');
@@ -102,33 +141,45 @@ export default function Onboarding() {
 
       <div className="onboarding">
         <div className="background" />
-        
-        {/* Progress indicator */}
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${(step / 4) * 100}%` }} />
+
+        {/* Step Indicator */}
+        <div className="stepper">
+          {STEP_LABELS.map((label, i) => {
+            const stepNum = i + 1;
+            const isActive = stepNum === step;
+            const isComplete = stepNum < step;
+            return (
+              <div key={label} className={`stepper-item ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}>
+                <div className="stepper-dot">
+                  {isComplete ? '✓' : stepNum}
+                </div>
+                <span className="stepper-label">{label}</span>
+                {i < STEP_LABELS.length - 1 && <div className="stepper-line" />}
+              </div>
+            );
+          })}
         </div>
 
         <div className="content">
-          {/* Step 1: Theory of Change */}
+          {/* Step 1: Welcome */}
           {step === 1 && (
-            <div className="step-content">
+            <div className="step-content" key="step1">
               <div className="welcome-header">
-                <span className="welcome-emoji">🌅</span>
                 <h1>Welcome, {firstName}</h1>
-                <p className="subtitle">Let's build your foundation for metabolic flourishing</p>
+                <p className="subtitle">
+                  You're about to begin a 28-day journey to build the habits, strength, and mindset
+                  you need for the most important role of your life.
+                </p>
               </div>
 
-              <div className="theory-card">
-                <h2>The Science of Metabolic Flourishing</h2>
+              <div className="welcome-card">
+                <h2>What is Dad Ready?</h2>
                 <p>
-                  Your body is an incredible system. When you align your daily habits with your biology, 
-                  something remarkable happens: you don't just survive — you <em>flourish</em>.
+                  Dad Ready is a personal challenge for February 2026. It's built on a simple idea:
+                  the habits you practice daily compound into the person you become. When you align
+                  your daily routine with your biology, you don't just survive — you <em>flourish</em>.
                 </p>
-                <p>
-                  Metabolic flourishing isn't about perfection. It's about consistently showing up for 
-                  the practices that compound over time. Each habit you choose unlocks a cascade of benefits:
-                </p>
-                
+
                 <div className="benefits-grid">
                   <div className="benefit">
                     <span>🧠</span>
@@ -160,29 +211,46 @@ export default function Onboarding() {
                   </div>
                 </div>
 
-                <p className="cta-text">
-                  The best part? <strong>You choose what matters to you.</strong> There's no one-size-fits-all. 
-                  Select the habits that resonate, and we'll help you track them.
-                </p>
+                <div className="how-it-works">
+                  <h3>Here's how it works</h3>
+                  <div className="how-steps">
+                    <div className="how-step">
+                      <span className="how-num">1</span>
+                      <p>Choose the habits that matter to you</p>
+                    </div>
+                    <div className="how-step">
+                      <span className="how-num">2</span>
+                      <p>Set up partner support if you're expecting</p>
+                    </div>
+                    <div className="how-step">
+                      <span className="how-num">3</span>
+                      <p>Connect your journals to surface your wins</p>
+                    </div>
+                    <div className="how-step">
+                      <span className="how-num">4</span>
+                      <p>Tell us your why — so we can keep you going</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <button onClick={() => setStep(2)} className="primary-btn">
-                Choose My Habits →
+              <button onClick={() => goTo(2)} className="primary-btn">
+                Let's Get Started
               </button>
             </div>
           )}
 
           {/* Step 2: Habit Selection */}
           {step === 2 && (
-            <div className="step-content">
+            <div className="step-content" key="step2">
               <div className="step-header">
                 <h1>Choose Your Habits</h1>
-                <p>Select the practices you want to track. You can always change these later.</p>
+                <p>Select the practices you want to track this February. You can always change these later in settings.</p>
               </div>
 
               <div className="habits-selection">
                 {HABITS_INFO.map(habit => (
-                  <div 
+                  <div
                     key={habit.id}
                     className={`habit-card ${selectedHabits.includes(habit.id) ? 'selected' : ''}`}
                     onClick={() => toggleHabit(habit.id)}
@@ -207,9 +275,9 @@ export default function Onboarding() {
               {selectedHabits.includes('running') && (
                 <div className="mile-goal-section">
                   <label>Weekly Running Goal (miles)</label>
-                  <input 
-                    type="number" 
-                    value={weeklyMileGoal} 
+                  <input
+                    type="number"
+                    value={weeklyMileGoal}
                     onChange={(e) => setWeeklyMileGoal(Number(e.target.value))}
                     min="1"
                     max="100"
@@ -218,36 +286,35 @@ export default function Onboarding() {
               )}
 
               <div className="step-buttons">
-                <button onClick={() => setStep(1)} className="secondary-btn">← Back</button>
-                <button 
-                  onClick={() => setStep(3)} 
+                <button onClick={() => goTo(1)} className="secondary-btn">Back</button>
+                <button
+                  onClick={() => goTo(3)}
                   className="primary-btn"
                   disabled={selectedHabits.length === 0}
                 >
-                  Continue →
+                  Continue
                 </button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Partner Support / Pregnancy Tracking */}
+          {/* Step 3: Partner Support */}
           {step === 3 && (
-            <div className="step-content">
+            <div className="step-content" key="step3">
               <div className="step-header">
-                <span className="step-emoji">👶</span>
                 <h1>Partner Support</h1>
                 <p>
                   Get daily insights on what your partner might be experiencing and how you can support her through pregnancy.
                 </p>
               </div>
 
-              <div className="pregnancy-card">
+              <div className="glass-card">
                 <div className="toggle-row">
                   <div className="toggle-info">
                     <h3>Enable Pregnancy Tracking</h3>
                     <p>We'll show you daily tips based on her stage of pregnancy</p>
                   </div>
-                  <button 
+                  <button
                     className={`toggle-btn ${trackPregnancy ? 'active' : ''}`}
                     onClick={() => setTrackPregnancy(!trackPregnancy)}
                   >
@@ -291,13 +358,13 @@ export default function Onboarding() {
               </div>
 
               <div className="step-buttons">
-                <button onClick={() => setStep(2)} className="secondary-btn">← Back</button>
-                <button 
-                  onClick={() => setStep(4)} 
+                <button onClick={() => goTo(2)} className="secondary-btn">Back</button>
+                <button
+                  onClick={() => goTo(4)}
                   className="primary-btn"
                   disabled={trackPregnancy && !lmpDate}
                 >
-                  Continue →
+                  Continue
                 </button>
               </div>
             </div>
@@ -305,27 +372,24 @@ export default function Onboarding() {
 
           {/* Step 4: Journal Docs */}
           {step === 4 && (
-            <div className="step-content">
+            <div className="step-content" key="step4">
               <div className="step-header">
-                <span className="step-emoji">✨</span>
                 <h1>Your Wins Feed</h1>
                 <p>
-                  We believe in celebrating how far you've come. Share your past journals or reflections, 
-                  and we'll surface your wins when you need them most.
+                  Share your past journals or reflections, and we'll surface your wins when you need them most.
                 </p>
               </div>
 
-              <div className="docs-card">
+              <div className="glass-card">
                 <div className="docs-intro">
                   <h3>Add Google Docs (Optional)</h3>
                   <p>
-                    Paste links to Google Docs containing your journal entries, reflections, or notes. 
-                    We'll extract the beautiful moments — times you've been great, overcome challenges, 
-                    or experienced gratitude.
+                    Paste links to Google Docs containing your journal entries, reflections, or notes.
+                    We'll extract the moments you've been great, overcome challenges, or experienced gratitude.
                   </p>
-                  <p className="privacy-note">
+                  <div className="privacy-note">
                     🔒 Your docs stay private. We only read them to find your wins.
-                  </p>
+                  </div>
                 </div>
 
                 <div className="doc-inputs">
@@ -344,9 +408,56 @@ export default function Onboarding() {
               </div>
 
               <div className="step-buttons">
-                <button onClick={() => setStep(3)} className="secondary-btn">← Back</button>
+                <button onClick={() => goTo(3)} className="secondary-btn">Back</button>
+                <button onClick={() => goTo(5)} className="primary-btn">
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Your Why */}
+          {step === 5 && (
+            <div className="step-content" key="step5">
+              <div className="step-header">
+                <h1>One Last Thing — Your Why</h1>
+                <p>
+                  This is optional, but powerful. Understanding what drives you helps us show you the right words at the right time.
+                </p>
+              </div>
+
+              <div className="glass-card">
+                <div className="why-section">
+                  <div className="why-group">
+                    <label>What does being a dad mean to you?</label>
+                    <textarea
+                      placeholder="Being a dad means..."
+                      value={dadMeaning}
+                      onChange={(e) => setDadMeaning(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="why-group">
+                    <label>What are you most afraid of on this journey?</label>
+                    <textarea
+                      placeholder="I'm afraid that..."
+                      value={dadFears}
+                      onChange={(e) => setDadFears(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="privacy-note">
+                    🔒 This stays on your device. It's just for you — and for us to personalize your experience.
+                  </div>
+                </div>
+              </div>
+
+              <div className="step-buttons">
+                <button onClick={() => goTo(4)} className="secondary-btn">Back</button>
                 <button onClick={completeOnboarding} className="primary-btn">
-                  {docUrls.some(url => url.trim()) ? "Let's Go! 🚀" : "Skip for Now →"}
+                  {dadMeaning || dadFears ? "Start My Journey" : "Skip & Start"}
                 </button>
               </div>
             </div>
@@ -379,35 +490,92 @@ export default function Onboarding() {
           background: linear-gradient(180deg, rgba(102, 126, 234, 0.15) 0%, transparent 100%);
         }
 
-        .progress-bar {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 4px;
-          background: rgba(255,255,255,0.1);
-          z-index: 100;
+        /* Stepper */
+        .stepper {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 32px 24px 0;
+          max-width: 600px;
+          margin: 0 auto;
+          gap: 0;
         }
 
-        .progress-fill {
-          height: 100%;
-          background: linear-gradient(90deg, #667eea, #764ba2);
-          transition: width 0.3s ease;
+        .stepper-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          position: relative;
+        }
+
+        .stepper-dot {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.1);
+          border: 2px solid rgba(255,255,255,0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: rgba(255,255,255,0.4);
+          transition: all 0.3s ease;
+          flex-shrink: 0;
+        }
+
+        .stepper-item.active .stepper-dot {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-color: #667eea;
+          color: #fff;
+          box-shadow: 0 0 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .stepper-item.complete .stepper-dot {
+          background: #22c55e;
+          border-color: #22c55e;
+          color: #fff;
+        }
+
+        .stepper-label {
+          font-size: 0.7rem;
+          color: rgba(255,255,255,0.3);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          white-space: nowrap;
+          transition: color 0.3s ease;
+        }
+
+        .stepper-item.active .stepper-label {
+          color: rgba(255,255,255,0.8);
+        }
+
+        .stepper-item.complete .stepper-label {
+          color: rgba(34, 197, 94, 0.8);
+        }
+
+        .stepper-line {
+          width: 24px;
+          height: 2px;
+          background: rgba(255,255,255,0.15);
+          margin: 0 4px;
+          flex-shrink: 0;
+        }
+
+        .stepper-item.complete .stepper-line {
+          background: rgba(34, 197, 94, 0.5);
+        }
+
+        @media (max-width: 600px) {
+          .stepper-label { display: none; }
+          .stepper-line { width: 20px; }
+          .stepper { gap: 0; padding: 24px 16px 0; }
         }
 
         .content {
           max-width: 720px;
           margin: 0 auto;
-          padding: 60px 24px;
-        }
-
-        .loading {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #1a1a2e;
-          color: #fff;
+          padding: 40px 24px 60px;
         }
 
         /* Step Content */
@@ -416,58 +584,58 @@ export default function Onboarding() {
         }
 
         @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
+          from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }
         }
 
         /* Welcome Header */
         .welcome-header {
           text-align: center;
-          margin-bottom: 40px;
-        }
-
-        .welcome-emoji {
-          font-size: 4rem;
-          display: block;
-          margin-bottom: 16px;
+          margin-bottom: 36px;
         }
 
         .welcome-header h1 {
           font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 2.5rem;
-          font-weight: 400;
-          margin: 0 0 8px 0;
+          font-size: 2.8rem;
+          font-weight: 300;
+          margin: 0 0 12px 0;
+          background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.7) 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
         }
 
         .subtitle {
           color: rgba(255,255,255,0.6);
           font-size: 1.1rem;
+          line-height: 1.6;
+          max-width: 520px;
+          margin: 0 auto;
         }
 
-        /* Theory Card */
-        .theory-card {
-          background: rgba(255,255,255,0.08);
+        /* Welcome Card */
+        .welcome-card {
+          background: rgba(255,255,255,0.06);
           backdrop-filter: blur(20px);
           border: 1px solid rgba(255,255,255,0.1);
           border-radius: 24px;
-          padding: 32px;
+          padding: 36px;
           margin-bottom: 32px;
         }
 
-        .theory-card h2 {
+        .welcome-card h2 {
           font-family: 'Crimson Pro', Georgia, serif;
           font-size: 1.5rem;
           font-weight: 400;
-          margin: 0 0 20px 0;
+          margin: 0 0 16px 0;
         }
 
-        .theory-card p {
-          color: rgba(255,255,255,0.8);
+        .welcome-card > p {
+          color: rgba(255,255,255,0.75);
           line-height: 1.7;
-          margin-bottom: 16px;
+          margin-bottom: 24px;
         }
 
-        .theory-card em {
+        .welcome-card em {
           color: #a78bfa;
           font-style: italic;
         }
@@ -475,43 +643,72 @@ export default function Onboarding() {
         .benefits-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 16px;
-          margin: 24px 0;
+          gap: 12px;
+          margin-bottom: 28px;
         }
 
         @media (max-width: 600px) {
-          .benefits-grid {
-            grid-template-columns: 1fr;
-          }
+          .benefits-grid { grid-template-columns: 1fr; }
+          .welcome-header h1 { font-size: 2.2rem; }
         }
 
         .benefit {
           display: flex;
           gap: 12px;
-          padding: 16px;
+          padding: 14px;
           background: rgba(255,255,255,0.05);
           border-radius: 12px;
         }
 
-        .benefit span {
-          font-size: 1.5rem;
-        }
+        .benefit > span { font-size: 1.4rem; }
+        .benefit strong { display: block; margin-bottom: 2px; font-size: 0.9rem; }
+        .benefit p { margin: 0; font-size: 0.8rem; color: rgba(255,255,255,0.5); }
 
-        .benefit strong {
-          display: block;
-          margin-bottom: 4px;
-        }
-
-        .benefit p {
-          margin: 0;
-          font-size: 0.85rem;
-          color: rgba(255,255,255,0.6);
-        }
-
-        .cta-text {
-          margin-top: 24px;
-          padding-top: 20px;
+        /* How it works */
+        .how-it-works {
           border-top: 1px solid rgba(255,255,255,0.1);
+          padding-top: 24px;
+        }
+
+        .how-it-works h3 {
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 1.15rem;
+          font-weight: 400;
+          margin: 0 0 16px 0;
+          color: rgba(255,255,255,0.7);
+        }
+
+        .how-steps {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .how-step {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+
+        .how-num {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.3));
+          border: 1px solid rgba(102, 126, 234, 0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: #a78bfa;
+          flex-shrink: 0;
+        }
+
+        .how-step p {
+          margin: 0;
+          font-size: 0.95rem;
+          color: rgba(255,255,255,0.7);
         }
 
         /* Step Header */
@@ -529,38 +726,46 @@ export default function Onboarding() {
 
         .step-header p {
           color: rgba(255,255,255,0.6);
+          line-height: 1.6;
+          max-width: 500px;
+          margin: 0 auto;
         }
 
-        .step-emoji {
-          font-size: 3rem;
-          display: block;
-          margin-bottom: 16px;
+        /* Glass Card (shared for steps 3-5) */
+        .glass-card {
+          background: rgba(255,255,255,0.06);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 24px;
+          padding: 32px;
+          margin-bottom: 32px;
         }
 
         /* Habits Selection */
         .habits-selection {
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 14px;
           margin-bottom: 24px;
         }
 
         .habit-card {
           background: rgba(255,255,255,0.05);
-          border: 2px solid rgba(255,255,255,0.1);
+          border: 2px solid rgba(255,255,255,0.08);
           border-radius: 16px;
           padding: 20px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.25s ease;
         }
 
         .habit-card:hover {
           background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.15);
         }
 
         .habit-card.selected {
           border-color: #667eea;
-          background: rgba(102, 126, 234, 0.15);
+          background: rgba(102, 126, 234, 0.12);
         }
 
         .habit-header {
@@ -569,37 +774,24 @@ export default function Onboarding() {
           align-items: flex-start;
         }
 
-        .habit-emoji {
-          font-size: 2rem;
-        }
+        .habit-emoji { font-size: 2rem; }
 
-        .habit-title-area {
-          flex: 1;
-        }
-
-        .habit-title-area h3 {
-          margin: 0 0 4px 0;
-          font-size: 1.1rem;
-          font-weight: 500;
-        }
-
-        .habit-title-area p {
-          margin: 0;
-          font-size: 0.9rem;
-          color: rgba(255,255,255,0.6);
-        }
+        .habit-title-area { flex: 1; }
+        .habit-title-area h3 { margin: 0 0 4px 0; font-size: 1.05rem; font-weight: 500; }
+        .habit-title-area p { margin: 0; font-size: 0.88rem; color: rgba(255,255,255,0.55); }
 
         .habit-checkbox {
           width: 28px;
           height: 28px;
-          border: 2px solid rgba(255,255,255,0.3);
+          border: 2px solid rgba(255,255,255,0.25);
           border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 1rem;
+          font-size: 0.9rem;
           color: #fff;
           transition: all 0.2s;
+          flex-shrink: 0;
         }
 
         .habit-checkbox.checked {
@@ -610,9 +802,9 @@ export default function Onboarding() {
         .habit-science {
           margin-top: 12px;
           padding-top: 12px;
-          border-top: 1px solid rgba(255,255,255,0.1);
-          font-size: 0.85rem;
-          color: rgba(255,255,255,0.5);
+          border-top: 1px solid rgba(255,255,255,0.08);
+          font-size: 0.82rem;
+          color: rgba(255,255,255,0.45);
           display: flex;
           gap: 8px;
         }
@@ -628,6 +820,7 @@ export default function Onboarding() {
           display: block;
           margin-bottom: 8px;
           color: rgba(255,255,255,0.7);
+          font-size: 0.9rem;
         }
 
         .mile-goal-section input {
@@ -641,92 +834,7 @@ export default function Onboarding() {
           text-align: center;
         }
 
-        /* Docs Card */
-        .docs-card {
-          background: rgba(255,255,255,0.08);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 24px;
-          padding: 32px;
-          margin-bottom: 32px;
-        }
-
-        .docs-intro h3 {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 1.3rem;
-          font-weight: 400;
-          margin: 0 0 12px 0;
-        }
-
-        .docs-intro p {
-          color: rgba(255,255,255,0.7);
-          line-height: 1.6;
-          margin-bottom: 12px;
-        }
-
-        .privacy-note {
-          font-size: 0.9rem;
-          color: rgba(255,255,255,0.5);
-          padding: 12px;
-          background: rgba(255,255,255,0.05);
-          border-radius: 8px;
-        }
-
-        .doc-inputs {
-          margin-top: 24px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .doc-input-row {
-          display: flex;
-          gap: 12px;
-          align-items: center;
-        }
-
-        .doc-number {
-          width: 28px;
-          height: 28px;
-          background: rgba(255,255,255,0.1);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.85rem;
-          color: rgba(255,255,255,0.5);
-        }
-
-        .doc-input-row input {
-          flex: 1;
-          padding: 14px 16px;
-          background: rgba(255,255,255,0.05);
-          border: 1px solid rgba(255,255,255,0.15);
-          border-radius: 12px;
-          color: #fff;
-          font-size: 0.95rem;
-        }
-
-        .doc-input-row input:focus {
-          outline: none;
-          border-color: #667eea;
-          background: rgba(255,255,255,0.08);
-        }
-
-        .doc-input-row input::placeholder {
-          color: rgba(255,255,255,0.3);
-        }
-
-        /* Pregnancy Card */
-        .pregnancy-card {
-          background: rgba(255,255,255,0.08);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 24px;
-          padding: 32px;
-          margin-bottom: 32px;
-        }
-
+        /* Toggle */
         .toggle-row {
           display: flex;
           justify-content: space-between;
@@ -759,9 +867,7 @@ export default function Onboarding() {
           flex-shrink: 0;
         }
 
-        .toggle-btn.active {
-          background: #667eea;
-        }
+        .toggle-btn.active { background: #667eea; }
 
         .toggle-knob {
           position: absolute;
@@ -774,31 +880,18 @@ export default function Onboarding() {
           transition: all 0.2s;
         }
 
-        .toggle-btn.active .toggle-knob {
-          left: 28px;
-        }
+        .toggle-btn.active .toggle-knob { left: 28px; }
 
+        /* Pregnancy inputs */
         .pregnancy-inputs {
           margin-top: 28px;
           padding-top: 28px;
           border-top: 1px solid rgba(255,255,255,0.1);
         }
 
-        .input-group {
-          margin-bottom: 24px;
-        }
-
-        .input-group label {
-          display: block;
-          font-weight: 500;
-          margin-bottom: 4px;
-        }
-
-        .input-group .input-help {
-          color: rgba(255,255,255,0.5);
-          font-size: 0.85rem;
-          margin: 0 0 12px 0;
-        }
+        .input-group { margin-bottom: 24px; }
+        .input-group label { display: block; font-weight: 500; margin-bottom: 4px; }
+        .input-group .input-help { color: rgba(255,255,255,0.5); font-size: 0.85rem; margin: 0 0 12px 0; }
 
         .input-group input[type="date"] {
           padding: 14px 18px;
@@ -815,11 +908,7 @@ export default function Onboarding() {
           filter: invert(1);
         }
 
-        .cycle-input {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
+        .cycle-input { display: flex; align-items: center; gap: 12px; }
 
         .cycle-input input {
           width: 100px;
@@ -832,8 +921,112 @@ export default function Onboarding() {
           text-align: center;
         }
 
-        .cycle-input span {
-          color: rgba(255,255,255,0.6);
+        .cycle-input span { color: rgba(255,255,255,0.6); }
+
+        .privacy-note {
+          font-size: 0.88rem;
+          color: rgba(255,255,255,0.45);
+          padding: 12px 16px;
+          background: rgba(255,255,255,0.04);
+          border-radius: 10px;
+          margin-top: 8px;
+        }
+
+        /* Docs */
+        .docs-intro h3 {
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 1.3rem;
+          font-weight: 400;
+          margin: 0 0 12px 0;
+        }
+
+        .docs-intro p {
+          color: rgba(255,255,255,0.65);
+          line-height: 1.6;
+          margin-bottom: 12px;
+        }
+
+        .doc-inputs {
+          margin-top: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .doc-input-row {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+
+        .doc-number {
+          width: 28px;
+          height: 28px;
+          background: rgba(255,255,255,0.08);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.8rem;
+          color: rgba(255,255,255,0.4);
+          flex-shrink: 0;
+        }
+
+        .doc-input-row input {
+          flex: 1;
+          padding: 14px 16px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 12px;
+          color: #fff;
+          font-size: 0.9rem;
+        }
+
+        .doc-input-row input:focus {
+          outline: none;
+          border-color: #667eea;
+          background: rgba(255,255,255,0.08);
+        }
+
+        .doc-input-row input::placeholder { color: rgba(255,255,255,0.25); }
+
+        /* Your Why */
+        .why-section {
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .why-group label {
+          display: block;
+          font-weight: 500;
+          margin-bottom: 10px;
+          font-size: 1rem;
+          color: rgba(255,255,255,0.85);
+        }
+
+        .why-group textarea {
+          width: 100%;
+          padding: 16px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 14px;
+          color: #fff;
+          font-family: inherit;
+          font-size: 0.95rem;
+          line-height: 1.6;
+          resize: none;
+          transition: border-color 0.2s;
+        }
+
+        .why-group textarea:focus {
+          outline: none;
+          border-color: rgba(102, 126, 234, 0.5);
+          background: rgba(255,255,255,0.07);
+        }
+
+        .why-group textarea::placeholder {
+          color: rgba(255,255,255,0.25);
         }
 
         /* Buttons */
@@ -844,7 +1037,7 @@ export default function Onboarding() {
         }
 
         .primary-btn {
-          padding: 16px 32px;
+          padding: 16px 36px;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           border: none;
           border-radius: 14px;
@@ -852,7 +1045,13 @@ export default function Onboarding() {
           font-size: 1rem;
           font-weight: 500;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.25s ease;
+          display: block;
+          margin: 0 auto;
+        }
+
+        .step-buttons .primary-btn {
+          margin: 0;
         }
 
         .primary-btn:hover:not(:disabled) {
@@ -867,17 +1066,18 @@ export default function Onboarding() {
 
         .secondary-btn {
           padding: 16px 32px;
-          background: rgba(255,255,255,0.1);
-          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.15);
           border-radius: 14px;
-          color: #fff;
+          color: rgba(255,255,255,0.7);
           font-size: 1rem;
           cursor: pointer;
           transition: all 0.2s;
         }
 
         .secondary-btn:hover {
-          background: rgba(255,255,255,0.15);
+          background: rgba(255,255,255,0.12);
+          color: #fff;
         }
       `}</style>
     </>

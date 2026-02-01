@@ -346,7 +346,7 @@ export default function Home() {
             <span className="subtitle">February 2026</span>
           </div>
           <div className="header-right">
-            <button onClick={() => router.push('/onboarding')} className="settings-btn">⚙️</button>
+            <button onClick={() => router.push('/settings')} className="settings-btn">⚙️</button>
             <span className="user-name">{session.user?.name?.split(' ')[0]}</span>
             <button onClick={() => signOut()} className="sign-out-btn">Sign Out</button>
           </div>
@@ -377,7 +377,7 @@ export default function Home() {
               ) : (
                 <div className="win-content">
                   <p className="win-placeholder">Add journal docs in settings to see your wins here.</p>
-                  <button onClick={() => router.push('/onboarding')} className="load-wins-btn">
+                  <button onClick={() => router.push('/settings')} className="load-wins-btn">
                     Add Journal Docs
                   </button>
                 </div>
@@ -467,7 +467,7 @@ export default function Home() {
                 {habits.length === 0 ? (
                   <div className="no-habits">
                     <p>No habits selected yet.</p>
-                    <button onClick={() => router.push('/onboarding')} className="load-wins-btn">
+                    <button onClick={() => router.push('/settings')} className="load-wins-btn">
                       Choose Your Habits
                     </button>
                   </div>
