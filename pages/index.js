@@ -50,6 +50,15 @@ export default function Home() {
   // Voice notes
   const [voiceNotes, setVoiceNotes] = useState([]);
 
+  // Save confirmations
+  const [savedSection, setSavedSection] = useState(null);
+  const savedTimerRef = useRef(null);
+  const flashSaved = (section) => {
+    setSavedSection(section);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSavedSection(null), 2000);
+  };
+
   // Calendar intentions
   const [intentionInput, setIntentionInput] = useState('');
   const [intentionGoals, setIntentionGoals] = useState([]);
@@ -175,6 +184,7 @@ export default function Home() {
         [selectedDate]: { ...prev.habits?.[selectedDate], running: miles > 0 }
       }
     }));
+    flashSaved('miles');
   };
 
   const saveGratitude = () => {
@@ -187,6 +197,7 @@ export default function Home() {
         [selectedDate]: { ...prev.habits?.[selectedDate], gratitude: filled }
       }
     }));
+    flashSaved('gratitude');
   };
 
   const saveReflection = useCallback(() => {
@@ -203,6 +214,7 @@ export default function Home() {
       },
       journal: { ...prev.journal, [selectedDate]: reflectionInput }
     }));
+    flashSaved('reflection');
   }, [reflectionInput, voiceNotes, selectedDate]);
 
   // Audio controls
@@ -537,6 +549,7 @@ export default function Home() {
             <input type="number" step="0.1" placeholder="Miles today" value={milesInput}
               onChange={(e) => setMilesInput(e.target.value)} className="input-field" />
             <button onClick={saveMiles} className="save-btn">Save</button>
+            {savedSection === 'miles' && <span className="saved-flash">Saved ✓</span>}
           </div>
         )}
 
@@ -548,6 +561,10 @@ export default function Home() {
                 onChange={(e) => { const n = [...gratitudeInput]; n[i] = e.target.value; setGratitudeInput(n); }}
                 onBlur={saveGratitude} className="input-field gratitude-input" />
             ))}
+            <div className="gratitude-save-row">
+              <button onClick={saveGratitude} className="save-btn small">Save</button>
+              {savedSection === 'gratitude' && <span className="saved-flash">Saved ✓</span>}
+            </div>
           </div>
         )}
       </div>
@@ -596,8 +613,8 @@ export default function Home() {
             )}
             <div className="header-info">
               <span className="header-welcome">Welcome, {session?.user?.name?.split(' ')[0] || 'there'}</span>
-              {pregnancyInfo && pregnancyPercent && (
-                <span className="header-pregnancy">{pregnancyInfo.weeks}w {pregnancyInfo.days}d &bull; {pregnancyPercent.percent}%</span>
+              {pregnancyInfo && settings?.lmpDate && (
+                <span className="header-pregnancy">Your Partner Is Due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
               )}
             </div>
           </div>
@@ -672,7 +689,7 @@ export default function Home() {
                   <div className="pregnancy-section">
                     {settings?.lmpDate && (
                       <div className="pregnancy-due-date">
-                        Est. due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28)
+                        Your Partner Is Due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28)
                           .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                       </div>
                     )}
@@ -744,6 +761,8 @@ export default function Home() {
                   />
 
                   <div className="reflection-actions">
+                    <button onClick={saveReflection} className="save-btn small">Save Reflection</button>
+                    {savedSection === 'reflection' && <span className="saved-flash">Saved ✓</span>}
                     <button onClick={toggleAudio} className={`audio-btn ${audioPlaying ? 'playing' : ''}`}>
                       🎵 {audioPlaying ? 'Pause Audio' : 'Ambient Audio'}
                     </button>
@@ -784,12 +803,6 @@ export default function Home() {
                   <div className="reminder-label">Just A Reminder</div>
                   <p className="reminder-text">{currentReminder}</p>
                   <button onClick={showNextReminder} className="reminder-btn">Show me another →</button>
-                  {pregnancyInfo && (
-                    <div className="reminder-support-tip">
-                      <span className="support-tip-icon">💡</span>
-                      <p className="support-tip-text">{pregnancyInfo.todaysTip}</p>
-                    </div>
-                  )}
                 </div>
               ) : settings?.docUrls?.some(url => url.trim()) ? (
                 <div className="reminder-card">
@@ -800,6 +813,49 @@ export default function Home() {
                   </button>
                 </div>
               ) : null}
+
+              {/* ── THIS MONTH ── */}
+              {pregnancyInfo && settings?.lmpDate && (
+                <div className="this-month-card">
+                  <div className="this-month-label">This Month</div>
+                  {(() => {
+                    const lmp = new Date(settings.lmpDate);
+                    const cycleLength = settings.cycleLength || 28;
+                    const ovulationDay = cycleLength - 14;
+                    const adjustment = ovulationDay - 14;
+                    const feb1 = new Date('2026-02-01');
+                    const feb28 = new Date('2026-02-28');
+
+                    const monthMilestones = pregnancyMilestones.map(m => {
+                      const milestoneDate = new Date(lmp);
+                      milestoneDate.setDate(milestoneDate.getDate() + (m.week * 7) + adjustment);
+                      return { ...m, date: milestoneDate };
+                    }).filter(m => m.date >= feb1 && m.date <= feb28);
+
+                    return monthMilestones.length > 0 ? (
+                      <div className="month-milestones">
+                        {monthMilestones.map((m, i) => (
+                          <div key={i} className="month-milestone-item">
+                            <span className="month-milestone-emoji">{m.emoji}</span>
+                            <div className="month-milestone-info">
+                              <span className="month-milestone-week">Week {m.week} — {m.label}</span>
+                              <span className="month-milestone-date">
+                                {m.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="month-no-milestones">No major milestones this month — keep showing up.</p>
+                    );
+                  })()}
+                  <div className="month-tip">
+                    <span className="support-tip-icon">💡</span>
+                    <p className="support-tip-text">{pregnancyInfo.todaysTip}</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1288,8 +1344,26 @@ export default function Home() {
         .milestone-week { font-weight: 600; color: #e879f9; min-width: 60px; }
         .milestone-label { color: rgba(255,255,255,0.7); }
 
-        /* Support tip in reminder */
-        .reminder-support-tip { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(245, 158, 11, 0.15); }
+        /* Save confirmation flash */
+        .saved-flash { color: #22c55e; font-size: 0.78rem; font-weight: 500; animation: flashIn 0.3s ease; }
+        @keyframes flashIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .gratitude-save-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+
+        /* This Month section */
+        .this-month-card {
+          background: rgba(255,255,255,0.06); backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.08); border-left: 3px solid rgba(232, 121, 249, 0.4);
+          border-radius: 16px; padding: 20px 22px; margin-top: 16px;
+        }
+        .this-month-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(232, 121, 249, 0.7); margin-bottom: 14px; font-weight: 600; }
+        .month-milestones { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+        .month-milestone-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(232, 121, 249, 0.06); border-radius: 10px; }
+        .month-milestone-emoji { font-size: 1.1rem; flex-shrink: 0; }
+        .month-milestone-info { display: flex; flex-direction: column; gap: 2px; }
+        .month-milestone-week { font-size: 0.85rem; color: rgba(255,255,255,0.8); }
+        .month-milestone-date { font-size: 0.72rem; color: rgba(232, 121, 249, 0.6); }
+        .month-no-milestones { font-size: 0.85rem; color: rgba(255,255,255,0.4); margin-bottom: 14px; font-style: italic; }
+        .month-tip { display: flex; gap: 10px; padding-top: 14px; border-top: 1px solid rgba(232, 121, 249, 0.15); }
         .support-tip-icon { flex-shrink: 0; font-size: 1rem; }
         .support-tip-text { font-size: 0.82rem; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0; }
 
