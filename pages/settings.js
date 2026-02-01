@@ -5,9 +5,9 @@ import Head from "next/head";
 import { getDailyTip } from '../lib/pregnancy';
 
 const ALL_HABITS = [
-  { id: 'noCarbs', emoji: '🥗', title: 'No Processed Carbs' },
   { id: 'running', emoji: '🏃', title: 'Running' },
   { id: 'strength', emoji: '💪', title: 'Strength Training' },
+  { id: 'noSugar', emoji: '🍎', title: 'No Processed Sugar' },
   { id: 'meditation', emoji: '🧘', title: 'Meditation' },
   { id: 'gratitude', emoji: '🙏', title: 'Gratitude Practice' }
 ];
@@ -16,7 +16,7 @@ export default function Settings() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [settings, setSettings] = useState(null);
-  const [winsCount, setWinsCount] = useState(0);
+  const [remindersCount, setRemindersCount] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [pregnancyInfo, setPregnancyInfo] = useState(null);
 
@@ -38,7 +38,7 @@ export default function Settings() {
   const [editDadFears, setEditDadFears] = useState('');
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [loadingWins, setLoadingWins] = useState(false);
+  const [loadingReminders, setLoadingReminders] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -53,9 +53,9 @@ export default function Settings() {
       router.push('/onboarding');
       return;
     }
-    const savedWins = localStorage.getItem('dadReadyWins');
+    const savedWins = localStorage.getItem('dadReadyReminders');
     if (savedWins) {
-      setWinsCount(JSON.parse(savedWins).length);
+      setRemindersCount(JSON.parse(savedWins).length);
     }
   }, [router]);
 
@@ -127,9 +127,9 @@ export default function Settings() {
   };
 
   // Re-extract wins
-  const reExtractWins = async () => {
+  const reExtractReminders = async () => {
     if (!settings?.docUrls?.length) return;
-    setLoadingWins(true);
+    setLoadingReminders(true);
     const allWins = [];
     for (const url of settings.docUrls) {
       if (!url.trim()) continue;
@@ -155,21 +155,21 @@ export default function Settings() {
       }
     }
     if (allWins.length > 0) {
-      localStorage.setItem('dadReadyWins', JSON.stringify(allWins));
-      setWinsCount(allWins.length);
+      localStorage.setItem('dadReadyReminders', JSON.stringify(allWins));
+      setRemindersCount(allWins.length);
     }
-    setLoadingWins(false);
+    setLoadingReminders(false);
   };
 
-  const clearWins = () => {
-    localStorage.removeItem('dadReadyWins');
-    setWinsCount(0);
+  const clearReminders = () => {
+    localStorage.removeItem('dadReadyReminders');
+    setRemindersCount(0);
   };
 
   const resetAllData = () => {
     localStorage.removeItem('dadReadySettings');
     localStorage.removeItem('dadReadyTracker2026');
-    localStorage.removeItem('dadReadyWins');
+    localStorage.removeItem('dadReadyReminders');
     router.push('/onboarding');
   };
 
@@ -480,24 +480,64 @@ export default function Settings() {
             )}
           </section>
 
-          {/* Wins Feed */}
+          {/* Just A Reminder */}
           <section className="card">
             <div className="card-header">
-              <h2 className="card-title">Wins Feed</h2>
+              <h2 className="card-title">Just A Reminder</h2>
             </div>
             <div className="wins-display">
-              <p className="wins-count">{winsCount} wins extracted</p>
+              <p className="wins-count">{remindersCount} reminders loaded</p>
               <div className="wins-actions">
                 <button
-                  onClick={reExtractWins}
+                  onClick={reExtractReminders}
                   className="action-btn"
-                  disabled={loadingWins || !settings.docUrls?.length}
+                  disabled={loadingReminders || !settings.docUrls?.length}
                 >
-                  {loadingWins ? 'Extracting...' : 'Re-extract Wins'}
+                  {loadingReminders ? 'Extracting...' : 'Re-extract Reminders'}
                 </button>
-                {winsCount > 0 && (
-                  <button onClick={clearWins} className="action-btn secondary">Clear Wins</button>
+                {remindersCount > 0 && (
+                  <button onClick={clearReminders} className="action-btn secondary">Clear Reminders</button>
                 )}
+              </div>
+            </div>
+          </section>
+
+          {/* Voice & AI */}
+          <section className="card">
+            <div className="card-header">
+              <h2 className="card-title">Voice & AI</h2>
+            </div>
+            <div className="api-key-section">
+              <label className="field-label">OpenAI API Key (for voice transcription)</label>
+              <div className="api-key-row">
+                <input
+                  type="password"
+                  placeholder="sk-..."
+                  value={settings.openaiApiKey || ''}
+                  onChange={(e) => saveSettings({ openaiApiKey: e.target.value })}
+                  className="settings-input"
+                />
+              </div>
+              <p className="field-note">Your key stays on your device and is only used for voice note transcription via OpenAI Whisper.</p>
+            </div>
+          </section>
+
+          {/* Coach Conversations */}
+          <section className="card">
+            <div className="card-header">
+              <h2 className="card-title">Coach Conversations</h2>
+            </div>
+            <div className="wins-display">
+              <p className="wins-count">
+                {(() => { try { return JSON.parse(localStorage.getItem('dadReadyCoachConversations') || '[]').length; } catch { return 0; } })()} conversations
+              </p>
+              <div className="wins-actions">
+                <button onClick={() => router.push('/coach')} className="action-btn">
+                  Open Coach
+                </button>
+                <button onClick={() => { localStorage.removeItem('dadReadyCoachConversations'); window.location.reload(); }} className="action-btn secondary">
+                  Clear All Conversations
+                </button>
               </div>
             </div>
           </section>
@@ -545,7 +585,7 @@ export default function Settings() {
               <div className="danger-item destructive">
                 <div>
                   <p className="danger-title">Reset All Data</p>
-                  <p className="danger-desc">Erase all habits, tracking data, wins, and settings. This cannot be undone.</p>
+                  <p className="danger-desc">Erase all habits, tracking data, reminders, and settings. This cannot be undone.</p>
                 </div>
                 {showResetConfirm ? (
                   <div className="confirm-group">

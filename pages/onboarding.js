@@ -5,11 +5,11 @@ import Head from "next/head";
 
 const HABITS_INFO = [
   {
-    id: 'noCarbs',
-    emoji: '🥗',
-    title: 'No Processed Carbs',
-    description: 'Stabilize blood sugar, reduce inflammation, and maintain steady energy throughout the day.',
-    science: 'Eliminating processed carbs reduces insulin spikes by up to 50%, improving metabolic flexibility and mental clarity.'
+    id: 'noSugar',
+    emoji: '🍎',
+    title: 'No Processed Sugar',
+    description: 'Eliminate processed sugar to reduce inflammation, stabilize energy, and sharpen mental clarity.',
+    science: 'Cutting processed sugar reduces inflammation markers by up to 40% and stabilizes blood glucose, improving focus and mood.'
   },
   {
     id: 'running',
@@ -41,7 +41,7 @@ const HABITS_INFO = [
   }
 ];
 
-const STEP_LABELS = ['Welcome', 'Habits', 'Partner', 'Journals', 'Your Why'];
+const STEP_LABELS = ['Welcome', 'Habits', 'Partner', 'Reminders', 'Your Why'];
 
 export default function Onboarding() {
   const { data: session, status } = useSession();
@@ -374,9 +374,9 @@ export default function Onboarding() {
           {step === 4 && (
             <div className="step-content" key="step4">
               <div className="step-header">
-                <h1>Your Wins Feed</h1>
+                <h1>Just A Reminder</h1>
                 <p>
-                  Share your past journals or reflections, and we'll surface your wins when you need them most.
+                  Share your past journals or reflections, and we'll surface reminders of your gold — moments where your character shone through.
                 </p>
               </div>
 
@@ -388,7 +388,7 @@ export default function Onboarding() {
                     We'll extract the moments you've been great, overcome challenges, or experienced gratitude.
                   </p>
                   <div className="privacy-note">
-                    🔒 Your docs stay private. We only read them to find your wins.
+                    🔒 Your docs stay private. We only read them to uncover your reminders.
                   </div>
                 </div>
 

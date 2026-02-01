@@ -22,27 +22,26 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "user",
-          content: `You are helping someone build a "wins feed" - a collection of their personal victories, beautiful moments, and times they've been great.
+          content: `You are helping someone remember the gold in their story. Read through their journal content and extract 5-10 meaningful moments where their character, strength, or heart shone through.
 
-Read through this journal/reflection content and extract 5-10 meaningful "wins" - these could be:
-- Accomplishments they're proud of
-- Moments of gratitude or joy
-- Times they overcame challenges
-- Insights or breakthroughs
-- Acts of kindness or connection
-- Personal growth moments
+For each moment:
+- Abstract any specific names (use "a friend", "a colleague", "someone close to you" instead)
+- Frame it as a reminder of a core strength — resilience, empathy, courage, patience, discipline, love
+- Connect it to why they are ready to be a great father
+- Write in second person, present tense ("You...")
+- Keep each reminder 2-3 sentences
 
-For each win, write it as a short, encouraging reminder (1-2 sentences) that would feel good to read on a tough day. Write in second person ("You...") to speak directly to them.
+The tone should be warm, grounding, and meaningful — not congratulatory or hype. Think of a wise mentor quietly reminding someone of who they really are. These are "just a reminder" moments — proof that this person has always had what it takes.
 
 Document title: ${title || 'Journal Entry'}
 
 Content:
 ${content.substring(0, 8000)}
 
-Return the wins as a JSON array of strings. Only return the JSON array, nothing else.
+Return the reminders as a JSON array of strings. Only return the JSON array, nothing else.
 
 Example format:
-["You crushed that presentation and got a standing ovation from the team.", "You showed up for your friend when they needed you most.", "You ran your first 5K even when you didn't feel like it."]`
+["Remember when you stayed up all night helping a friend through a crisis? That wasn't obligation — that was who you are. That same heart is what your child will know as safety.", "You chose the harder path when no one was watching. That quiet discipline — the kind that doesn't need an audience — is exactly what fatherhood asks for."]`
         }
       ]
     });
