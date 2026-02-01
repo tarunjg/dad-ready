@@ -1128,8 +1128,6 @@ export default function Home() {
                       <span className="pstat-label">Daily spiritual passages</span>
                       <span className="pstat-value">365 days</span>
                     </div>
-                      );
-                    })}
                   </div>
                 </div>
 
