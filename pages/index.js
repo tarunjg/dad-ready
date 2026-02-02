@@ -5,6 +5,7 @@ import Head from 'next/head';
 import { getQuoteByDay } from '../lib/quotes';
 import { getDailyTip, getPregnancyPercentage, getEstimatedDueDate, getPregnancyInfoAtDate, pregnancyMilestones, getWeeklyAction } from '../lib/pregnancy';
 import { PILLARS, getAllHabits, getTotalCompletion, getPillarCompletion, migrateSettings } from '../lib/pillars';
+import { getPassageByDate } from '../lib/spiritualPassages';
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -803,6 +804,15 @@ export default function Home() {
                 <div className="pillar-card" style={{ borderLeftColor: PILLARS.mind.borderColor }}>
                   <div className="pillar-header">
                     <span className="pillar-label" style={{ color: PILLARS.mind.color }}>Mind</span>
+                    {(() => {
+                      const { completed, total } = getPillarCompletion('mind', dayHabits, activeHabitIds);
+                      return total > 0 ? <span className="pillar-count" style={{ color: PILLARS.mind.color }}>{completed}/{total}</span> : null;
+                    })()}
+                  </div>
+
+                  {/* Mindfulness Habits */}
+                  <div className="habits-list">
+                    {renderPillarHabits('mind')}
                   </div>
 
                   {/* Pregnancy */}
@@ -872,14 +882,19 @@ export default function Home() {
                 <div className="pillar-card" style={{ borderLeftColor: PILLARS.soul.borderColor }}>
                   <div className="pillar-header">
                     <span className="pillar-label" style={{ color: PILLARS.soul.color }}>Soul</span>
-                    {(() => {
-                      const { completed, total } = getPillarCompletion('soul', dayHabits, activeHabitIds);
-                      return total > 0 ? <span className="pillar-count" style={{ color: PILLARS.soul.color }}>{completed}/{total}</span> : null;
-                    })()}
                   </div>
-                  <div className="habits-list">
-                    {renderPillarHabits('soul')}
-                  </div>
+                  {(() => {
+                    const passage = getPassageByDate(selectedDate);
+                    if (!passage) return null;
+                    return (
+                      <div className="soul-passage">
+                        <div className="soul-passage-tradition">{passage.tradition}</div>
+                        <blockquote className="soul-passage-text">{passage.text}</blockquote>
+                        <div className="soul-passage-source">&mdash; {passage.source}</div>
+                        <div className="soul-passage-reflection">{passage.reflection}</div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* ── JUST A REMINDER ── */}
@@ -1046,10 +1061,10 @@ export default function Home() {
                       <div className="stat-unit">days</div>
                     </div>
                   )}
-                  {PILLARS.soul.habits.some(h => activeHabitIds.includes(h.id)) && (
-                    <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.soul.color}` }}>
-                      <div className="stat-label">Soul Streak</div>
-                      <div className="stat-value">{getPillarStreak('soul')}</div>
+                  {PILLARS.mind.habits.some(h => activeHabitIds.includes(h.id)) && (
+                    <div className="card stat-card" style={{ borderBottom: `2px solid ${PILLARS.mind.color}` }}>
+                      <div className="stat-label">Mind Streak</div>
+                      <div className="stat-value">{getPillarStreak('mind')}</div>
                       <div className="stat-unit">days</div>
                     </div>
                   )}
@@ -1082,6 +1097,16 @@ export default function Home() {
                 <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.mind.borderColor }}>
                   <h3 className="pillar-stat-title" style={{ color: PILLARS.mind.color }}>Mind</h3>
                   <div className="pillar-stat-grid">
+                    {PILLARS.mind.habits.filter(h => activeHabitIds.includes(h.id)).map(h => {
+                      const allDays = getAllDaysUpToToday();
+                      const done = allDays.filter(d => data?.habits?.[d]?.[h.id]).length;
+                      return (
+                        <div key={h.id} className="pstat-item">
+                          <span className="pstat-label">{h.emoji} {h.label.split('(')[0].trim()}</span>
+                          <span className="pstat-value">{done}/{allDays.length} days</span>
+                        </div>
+                      );
+                    })}
                     {pregnancyInfo && pregnancyPercent && (
                       <div className="pstat-item">
                         <span className="pstat-label">Pregnancy</span>
@@ -1099,16 +1124,10 @@ export default function Home() {
                 <div className="pillar-stat-card" style={{ borderLeftColor: PILLARS.soul.borderColor }}>
                   <h3 className="pillar-stat-title" style={{ color: PILLARS.soul.color }}>Soul</h3>
                   <div className="pillar-stat-grid">
-                    {PILLARS.soul.habits.filter(h => activeHabitIds.includes(h.id)).map(h => {
-                      const allDays = getAllDaysUpToToday();
-                      const done = allDays.filter(d => data?.habits?.[d]?.[h.id]).length;
-                      return (
-                        <div key={h.id} className="pstat-item">
-                          <span className="pstat-label">{h.emoji} {h.label.split('(')[0].trim()}</span>
-                          <span className="pstat-value">{done}/{allDays.length} days</span>
-                        </div>
-                      );
-                    })}
+                    <div className="pstat-item">
+                      <span className="pstat-label">Daily spiritual passages</span>
+                      <span className="pstat-value">365 days</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1412,6 +1431,27 @@ export default function Home() {
         .weekly-action-check { font-size: 1.2rem; flex-shrink: 0; }
         .weekly-action-text { font-size: 0.92rem; color: rgba(255,255,255,0.85); line-height: 1.4; }
         .weekly-action-text.done { text-decoration: line-through; color: rgba(255,255,255,0.4); }
+
+        /* Soul Passage */
+        .soul-passage { padding: 4px 0 0; }
+        .soul-passage-tradition {
+          font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px;
+          color: rgba(245, 158, 11, 0.6); margin-bottom: 12px; font-weight: 600;
+        }
+        .soul-passage-text {
+          font-family: 'Crimson Pro', Georgia, serif; font-size: 1.1rem; line-height: 1.75;
+          color: rgba(255,255,255,0.9); margin: 0 0 12px 0; padding: 0 0 0 16px;
+          border-left: 2px solid rgba(245, 158, 11, 0.3); font-style: italic;
+        }
+        .soul-passage-source {
+          font-size: 0.82rem; color: rgba(245, 158, 11, 0.7); margin-bottom: 16px;
+          text-align: right; font-style: italic;
+        }
+        .soul-passage-reflection {
+          font-size: 0.92rem; line-height: 1.7; color: rgba(255,255,255,0.65);
+          padding: 14px 16px; background: rgba(245, 158, 11, 0.06);
+          border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.1);
+        }
 
         /* Reminder card */
         .reminder-card {
