@@ -1125,8 +1125,8 @@ export default function Home() {
                   <h3 className="pillar-stat-title" style={{ color: PILLARS.soul.color }}>Soul</h3>
                   <div className="pillar-stat-grid">
                     <div className="pstat-item">
-                      <span className="pstat-label">Daily spiritual passages</span>
-                      <span className="pstat-value">365 days</span>
+                      <span className="pstat-label">Weekly spiritual passages</span>
+                      <span className="pstat-value">52 weeks</span>
                     </div>
                   </div>
                 </div>
