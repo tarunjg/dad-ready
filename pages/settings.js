@@ -40,6 +40,11 @@ export default function Settings() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   // loadingReminders removed - re-extraction handled from dashboard
 
+  // Email digest states
+  const [digestSending, setDigestSending] = useState(false);
+  const [digestResult, setDigestResult] = useState(null);
+  const [settingsCopied, setSettingsCopied] = useState(false);
+
   useEffect(() => {
     setMounted(true);
     const saved = localStorage.getItem('dadReadySettings');
@@ -129,6 +134,40 @@ export default function Settings() {
   const clearReminders = () => {
     localStorage.removeItem('dadReadyReminders');
     setRemindersCount(0);
+  };
+
+  // Email digest functions
+  const sendTestDigest = async () => {
+    setDigestSending(true);
+    setDigestResult(null);
+    try {
+      const res = await fetch('/api/send-digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDigestResult('sent');
+      } else {
+        setDigestResult('error: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      setDigestResult('error: ' + e.message);
+    }
+    setDigestSending(false);
+  };
+
+  const copyDigestSettings = () => {
+    const digestSettings = {
+      habits: settings.habits,
+      trackPregnancy: settings.trackPregnancy,
+      lmpDate: settings.lmpDate,
+      cycleLength: settings.cycleLength,
+    };
+    navigator.clipboard.writeText(JSON.stringify(digestSettings));
+    setSettingsCopied(true);
+    setTimeout(() => setSettingsCopied(false), 2000);
   };
 
   const resetAllData = () => {
@@ -477,6 +516,53 @@ export default function Settings() {
                   Clear All Conversations
                 </button>
               </div>
+            </div>
+          </section>
+
+          {/* Email Digest */}
+          <section className="card digest-card">
+            <div className="card-header">
+              <h2 className="card-title">Email Digest</h2>
+            </div>
+            <p className="digest-desc">
+              Get a daily email with your habits, quote, pregnancy update, and spiritual passage.
+              Click buttons in the email to mark habits complete.
+            </p>
+            <div className="digest-actions">
+              <button
+                onClick={sendTestDigest}
+                disabled={digestSending}
+                className="action-btn"
+              >
+                {digestSending ? 'Sending...' : 'Send Test Digest Now'}
+              </button>
+              <button
+                onClick={copyDigestSettings}
+                className="action-btn secondary"
+              >
+                {settingsCopied ? 'Copied!' : 'Copy Settings JSON'}
+              </button>
+            </div>
+            {digestResult === 'sent' && (
+              <p className="digest-success">Digest sent! Check your email.</p>
+            )}
+            {digestResult && digestResult.startsWith('error') && (
+              <p className="digest-error">{digestResult}</p>
+            )}
+            <div className="digest-setup">
+              <p className="digest-setup-title">Setup Instructions</p>
+              <ol className="digest-steps">
+                <li>Sign up at <strong>resend.com</strong> and get an API key</li>
+                <li>In Vercel, add these environment variables:
+                  <ul>
+                    <li><code>RESEND_API_KEY</code> — your Resend API key</li>
+                    <li><code>DIGEST_EMAIL</code> — your email address</li>
+                    <li><code>EMAIL_TOKEN_SECRET</code> — any random string</li>
+                    <li><code>DIGEST_SETTINGS</code> — click "Copy Settings JSON" above and paste</li>
+                  </ul>
+                </li>
+                <li>The digest sends daily at 5 AM PT (1 PM UTC). The cron is already configured.</li>
+              </ol>
             </div>
           </section>
 
@@ -1087,6 +1173,70 @@ export default function Settings() {
           color: #f87171;
         }
         .action-btn.destructive:hover { background: rgba(239, 68, 68, 0.25); }
+
+        /* Digest */
+        .digest-card {
+          border-color: rgba(102, 126, 234, 0.2);
+        }
+
+        .digest-desc {
+          color: rgba(255,255,255,0.55);
+          font-size: 0.88rem;
+          line-height: 1.6;
+          margin: 0 0 16px;
+        }
+
+        .digest-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+
+        .digest-success {
+          color: #22c55e;
+          font-size: 0.85rem;
+          margin: 0 0 12px;
+        }
+
+        .digest-error {
+          color: #f87171;
+          font-size: 0.85rem;
+          margin: 0 0 12px;
+        }
+
+        .digest-setup {
+          margin-top: 16px;
+          padding: 16px;
+          background: rgba(255,255,255,0.03);
+          border-radius: 12px;
+        }
+
+        .digest-setup-title {
+          font-size: 0.82rem;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: rgba(255,255,255,0.4);
+          margin: 0 0 12px;
+        }
+
+        .digest-steps {
+          margin: 0;
+          padding-left: 20px;
+          color: rgba(255,255,255,0.55);
+          font-size: 0.85rem;
+          line-height: 1.8;
+        }
+
+        .digest-steps li { margin-bottom: 8px; }
+        .digest-steps ul { padding-left: 16px; margin: 4px 0; }
+        .digest-steps code {
+          background: rgba(255,255,255,0.08);
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 0.82rem;
+          color: #667eea;
+        }
 
         /* About */
         .about-card {}
