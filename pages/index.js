@@ -815,67 +815,6 @@ export default function Home() {
                     {renderPillarHabits('mind')}
                   </div>
 
-                  {/* Pregnancy */}
-                  {pregnancyInfo && pregnancyPercent && (
-                    <div className="pregnancy-section">
-                      {settings?.lmpDate && (
-                        <div className="pregnancy-due-date">
-                          Your Partner Is Due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28)
-                            .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                        </div>
-                      )}
-                      <div className="pregnancy-top-row">
-                        <span className="pregnancy-week-badge">{pregnancyInfo.weeks}w {pregnancyInfo.days}d</span>
-                        <div className="pregnancy-progress-wrap">
-                          <div className="pregnancy-progress-bar">
-                            <div className="pregnancy-progress-fill" style={{ width: `${pregnancyPercent.percent}%` }} />
-                          </div>
-                          <span className="pregnancy-pct">{pregnancyPercent.percent}%</span>
-                        </div>
-                      </div>
-
-                      <div className="pregnancy-summary" onClick={() => setPregnancyExpanded(!pregnancyExpanded)}>
-                        <span className="pregnancy-tip-preview">
-                          {pregnancyExpanded ? 'Hide details' : pregnancyInfo.todaysTip}
-                        </span>
-                        <span className="pregnancy-toggle">{pregnancyExpanded ? '\u2212' : '+'}</span>
-                      </div>
-
-                      {pregnancyExpanded && (
-                        <div className="pregnancy-details">
-                          <div className="pregnancy-detail-row">
-                            <span className="detail-icon">{'\uD83D\uDC76'}</span>
-                            <div><h4>Baby This Week</h4><p>{pregnancyInfo.baby}</p></div>
-                          </div>
-                          <div className="pregnancy-detail-row">
-                            <span className="detail-icon">{'\uD83D\uDC9C'}</span>
-                            <div><h4>What She May Be Feeling</h4><p>{pregnancyInfo.mom}</p></div>
-                          </div>
-                          <div className="pregnancy-detail-row highlight">
-                            <span className="detail-icon">{'\uD83D\uDCA1'}</span>
-                            <div><h4>Today's Support Tip</h4><p>{pregnancyInfo.todaysTip}</p></div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Weekly Action Checkbox */}
-                  {weeklyAction && (
-                    <div className="weekly-action-card">
-                      <div className="weekly-action-header">
-                        <span className="weekly-action-label">{'\uD83C\uDFAF'} This Week's Action</span>
-                      </div>
-                      <div className="weekly-action-item" onClick={toggleWeeklyAction}>
-                        <span className={`weekly-action-check ${weeklyActionDone ? 'done' : ''}`}>
-                          {weeklyActionDone ? '\u2705' : '\u2B1C'}
-                        </span>
-                        <span className={`weekly-action-text ${weeklyActionDone ? 'done' : ''}`}>
-                          {weeklyAction.emoji} {weeklyAction.text}
-                        </span>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* ── SOUL PILLAR ── */}
@@ -896,6 +835,89 @@ export default function Home() {
                     );
                   })()}
                 </div>
+
+                {/* ── HER EXPERIENCE THIS WEEK ── */}
+                {pregnancyInfo && pregnancyPercent && (
+                  <div className="her-experience-card">
+                    <div className="her-experience-header">
+                      <span className="her-experience-label">Her Experience This Week</span>
+                      <span className="her-experience-week-badge">Week {pregnancyInfo.weeks} {pregnancyInfo.weeks < 13 ? '· 1st Trimester' : pregnancyInfo.weeks < 27 ? '· 2nd Trimester' : '· 3rd Trimester'}</span>
+                    </div>
+
+                    {settings?.lmpDate && (
+                      <div className="her-experience-due-line">
+                        <span className="her-experience-due-icon">{'\uD83D\uDCC5'}</span>
+                        <span>Due {getEstimatedDueDate(settings.lmpDate, settings.cycleLength || 28)
+                          .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                        <div className="her-experience-progress-wrap">
+                          <div className="her-experience-progress-bar">
+                            <div className="her-experience-progress-fill" style={{ width: `${pregnancyPercent.percent}%` }} />
+                          </div>
+                          <span className="her-experience-pct">{pregnancyPercent.percent}%</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* What's Happening — always visible */}
+                    <div className="her-experience-body-section">
+                      <div className="her-experience-detail-row">
+                        <span className="detail-icon">{'\uD83D\uDC76'}</span>
+                        <div>
+                          <h4>What's Happening</h4>
+                          <p>{pregnancyInfo.baby}</p>
+                        </div>
+                      </div>
+
+                      <div className="her-experience-detail-row">
+                        <span className="detail-icon">{'\uD83E\uDEC0'}</span>
+                        <div>
+                          <h4>What She May Be Feeling</h4>
+                          <p>{pregnancyInfo.mom}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Support ideas — expandable */}
+                    <div className="her-experience-support-toggle" onClick={() => setPregnancyExpanded(!pregnancyExpanded)}>
+                      <span className="her-experience-support-label">{'\uD83D\uDC95'} Ways to Support Her</span>
+                      <span className="her-experience-toggle-icon">{pregnancyExpanded ? '\u2212' : '+'}</span>
+                    </div>
+
+                    {!pregnancyExpanded && (
+                      <div className="her-experience-tip-preview">
+                        {pregnancyInfo.todaysTip}
+                      </div>
+                    )}
+
+                    {pregnancyExpanded && (
+                      <div className="her-experience-support-list">
+                        {pregnancyInfo.support && pregnancyInfo.support.map((tip, i) => (
+                          <div key={i} className="her-experience-support-item">
+                            <span className="support-bullet">{['\uD83C\uDF38', '\u2728', '\uD83D\uDC9B', '\uD83C\uDF1F', '\uD83C\uDF3C'][i % 5]}</span>
+                            <span>{tip}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Weekly Action */}
+                    {weeklyAction && (
+                      <div className="her-experience-action">
+                        <div className="her-experience-action-header">
+                          <span>{'\uD83C\uDFAF'} This Week's Action</span>
+                        </div>
+                        <div className="her-experience-action-item" onClick={toggleWeeklyAction}>
+                          <span className={`weekly-action-check ${weeklyActionDone ? 'done' : ''}`}>
+                            {weeklyActionDone ? '\u2705' : '\u2B1C'}
+                          </span>
+                          <span className={`weekly-action-text ${weeklyActionDone ? 'done' : ''}`}>
+                            {weeklyAction.emoji} {weeklyAction.text}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* ── JUST A REMINDER ── */}
                 {currentReminder ? (
@@ -1398,36 +1420,81 @@ export default function Home() {
         .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); border-radius: 3px; transition: width 0.3s; }
         .progress-bar-fill.complete { background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); }
 
-        /* Pregnancy in Mind pillar */
-        .pregnancy-section { margin-bottom: 14px; }
-        .pregnancy-top-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
-        .pregnancy-due-date { font-size: 0.78rem; color: rgba(232, 121, 249, 0.7); margin-bottom: 8px; }
-        .pregnancy-week-badge { font-family: 'Crimson Pro', serif; font-size: 1.1rem; font-weight: 500; color: #e879f9; white-space: nowrap; }
-        .pregnancy-progress-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
-        .pregnancy-progress-bar { flex: 1; height: 8px; background: rgba(232, 121, 249, 0.15); border-radius: 4px; overflow: hidden; }
-        .pregnancy-progress-fill { height: 100%; background: linear-gradient(90deg, #e879f9, #a855f7); border-radius: 4px; transition: width 0.3s; }
-        .pregnancy-pct { font-size: 0.8rem; color: #e879f9; font-weight: 500; white-space: nowrap; }
+        /* Her Experience This Week — standalone section */
+        .her-experience-card {
+          background: rgba(255,255,255,0.06); backdrop-filter: blur(20px);
+          border: 1px solid rgba(232, 121, 249, 0.2); border-radius: 16px;
+          border-left: 3px solid #e879f9; padding: 20px; margin-bottom: 16px;
+        }
+        .her-experience-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .her-experience-label {
+          font-size: 0.72rem; text-transform: uppercase; letter-spacing: 2px;
+          font-weight: 600; color: #e879f9;
+        }
+        .her-experience-week-badge {
+          font-size: 0.75rem; color: rgba(232, 121, 249, 0.7);
+          font-weight: 500;
+        }
+        .her-experience-due-line {
+          display: flex; align-items: center; gap: 8px;
+          font-size: 0.8rem; color: rgba(232, 121, 249, 0.65);
+          margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .her-experience-due-icon { font-size: 0.9rem; }
+        .her-experience-progress-wrap { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 120px; }
+        .her-experience-progress-bar { flex: 1; height: 6px; background: rgba(232, 121, 249, 0.12); border-radius: 3px; overflow: hidden; }
+        .her-experience-progress-fill { height: 100%; background: linear-gradient(90deg, #f0abfc, #e879f9, #c026d3); border-radius: 3px; transition: width 0.3s; }
+        .her-experience-pct { font-size: 0.75rem; color: rgba(232, 121, 249, 0.6); font-weight: 500; white-space: nowrap; }
 
-        .pregnancy-summary { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 8px 0; }
-        .pregnancy-tip-preview { font-size: 0.85rem; color: rgba(255,255,255,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-        .pregnancy-toggle { font-size: 1.2rem; color: rgba(255,255,255,0.3); width: 28px; text-align: center; }
+        .her-experience-body-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+        .her-experience-detail-row {
+          display: flex; gap: 12px; padding: 14px;
+          background: rgba(232, 121, 249, 0.06); border-radius: 12px;
+        }
+        .detail-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+        .her-experience-detail-row h4 {
+          font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;
+          color: rgba(232, 121, 249, 0.6); margin-bottom: 4px;
+        }
+        .her-experience-detail-row p {
+          font-size: 0.88rem; line-height: 1.6; color: rgba(255,255,255,0.85);
+        }
 
-        .pregnancy-details { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); animation: fadeIn 0.2s ease; }
+        .her-experience-support-toggle {
+          display: flex; justify-content: space-between; align-items: center;
+          cursor: pointer; user-select: none; padding: 10px 0 6px;
+          border-top: 1px solid rgba(232, 121, 249, 0.1);
+        }
+        .her-experience-support-label {
+          font-size: 0.82rem; font-weight: 600; color: rgba(232, 121, 249, 0.8);
+        }
+        .her-experience-toggle-icon { font-size: 1.2rem; color: rgba(232, 121, 249, 0.4); width: 28px; text-align: center; }
+        .her-experience-tip-preview {
+          font-size: 0.85rem; color: rgba(255,255,255,0.5);
+          padding: 4px 0 4px 26px; font-style: italic;
+        }
+        .her-experience-support-list {
+          display: flex; flex-direction: column; gap: 8px;
+          padding: 10px 0; animation: fadeIn 0.2s ease;
+        }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .pregnancy-detail-row { display: flex; gap: 12px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 10px; }
-        .pregnancy-detail-row.highlight { background: rgba(168, 85, 247, 0.15); }
-        .detail-icon { font-size: 1.2rem; flex-shrink: 0; }
-        .pregnancy-detail-row h4 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
-        .pregnancy-detail-row p { font-size: 0.88rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
+        .her-experience-support-item {
+          display: flex; gap: 10px; align-items: flex-start;
+          font-size: 0.88rem; color: rgba(255,255,255,0.8); line-height: 1.5;
+          padding: 6px 10px; background: rgba(232, 121, 249, 0.05); border-radius: 8px;
+        }
+        .support-bullet { font-size: 0.9rem; flex-shrink: 0; }
 
         /* Weekly Action */
-        .weekly-action-card {
-          margin-top: 14px; padding: 16px; background: rgba(167, 139, 250, 0.08);
-          border: 1px solid rgba(167, 139, 250, 0.2); border-radius: 12px;
+        .her-experience-action {
+          margin-top: 14px; padding: 14px 16px; background: rgba(232, 121, 249, 0.08);
+          border: 1px solid rgba(232, 121, 249, 0.15); border-radius: 12px;
         }
-        .weekly-action-header { margin-bottom: 10px; }
-        .weekly-action-label { font-size: 0.78rem; font-weight: 600; color: rgba(167, 139, 250, 0.8); text-transform: uppercase; letter-spacing: 1px; }
-        .weekly-action-item { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 8px 0; user-select: none; }
+        .her-experience-action-header {
+          font-size: 0.78rem; font-weight: 600; color: rgba(232, 121, 249, 0.7);
+          text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+        }
+        .her-experience-action-item { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 4px 0; user-select: none; }
         .weekly-action-check { font-size: 1.2rem; flex-shrink: 0; }
         .weekly-action-text { font-size: 0.92rem; color: rgba(255,255,255,0.85); line-height: 1.4; }
         .weekly-action-text.done { text-decoration: line-through; color: rgba(255,255,255,0.4); }
